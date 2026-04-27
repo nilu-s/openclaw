@@ -1,0 +1,3 @@
+[console_scripts]
+nexusctl = nexusctl.main:main
+nexusctl-server = nexusctl.backend.main:main

@@ -1,3 +1,73 @@
-﻿# nexusctl
+# nexusctl (Python MVP, Real DB)
 
-Arbeitsordner fuer die Implementierung von `nexusctl`.
+CLI + Backend fuer Capability-Preflight und Capability-Status im OpenClaw-MVP.
+
+## Implementierter Scope
+
+- `auth`
+- `capabilities list`
+- `capabilities show`
+- `capabilities set-status` (lokal bereits auf `sw-techlead` + `--to available` begrenzt)
+- `nexusctl-server` (echter HTTP-Service mit SQLite-Persistenz)
+- Session-Store mit TTL-Check
+- Exit-Code- und Fehlercode-Mapping gemaess `NEXUSCTL_FUNCTIONS.md`
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+Danach steht `nexusctl` als Kommando zur Verfuegung.
+
+## Backend starten (echte DB)
+
+```bash
+nexusctl-server --db-path .nexusctl/nexusctl.sqlite3 --seed
+```
+
+Der Schalter `--seed` legt initiale MVP-Daten an (nur wenn die DB leer ist).
+
+## Schnellstart
+
+```bash
+nexusctl auth --agent-token "$NEXUS_AGENT_TOKEN" --output table
+nexusctl capabilities list --status all --output table
+nexusctl capabilities show F-001 --output json
+nexusctl capabilities set-status F-002 --to available --reason "All requirements verified and evidence linked." --output json
+```
+
+## Konfiguration (Env)
+
+- `NEXUSCTL_API_BASE_URL` (default: `http://127.0.0.1:8080`)
+- `NEXUS_AGENT_TOKEN` (Fallback fuer `auth`, wenn `--agent-token` fehlt)
+- `NEXUSCTL_AGENT_DIR` (empfohlen; Agent-Kontextpfad)
+- `NEXUSCTL_AGENT_ID` oder `OPENCLAW_AGENT_ID` (nur relevant ohne `NEXUSCTL_AGENT_DIR`)
+- `NEXUSCTL_SESSION_BASE` (default: `~/.openclaw/agents`, nur ohne `NEXUSCTL_AGENT_DIR`)
+
+## Session-Speicher
+
+Wenn `NEXUSCTL_AGENT_DIR` gesetzt ist:
+
+- `<NEXUSCTL_AGENT_DIR>/.nexusctl/sessions/<project-id>.json`
+- `<NEXUSCTL_AGENT_DIR>/.nexusctl/sessions/current.json`
+
+## Exit-Codes
+
+- `0` Erfolg
+- `2` Validation Error
+- `3` Not Found
+- `4` Permission Denied
+- `6` Precondition Failed
+- `10` Infrastructure Error
+
+## Tests
+
+```bash
+pytest
+```
+
+Enthalten sind:
+
+- Unit-Tests fuer Validierung, Rollen- und Exit-Code-Verhalten
+- Integrations-/AC-Tests fuer AC-001 bis AC-009 gegen echten `nexusctl-server` mit echter SQLite-DB
