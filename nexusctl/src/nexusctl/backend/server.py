@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
+import ssl
 import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +20,9 @@ class BackendConfig:
     host: str
     port: int
     db_path: Path
+    tls_cert_path: Path | None = None
+    tls_key_path: Path | None = None
+    allow_insecure_remote: bool = False
 
 
 @dataclass
@@ -31,14 +37,53 @@ class RunningServer:
         self._server.server_close()
 
 
+_MAX_JSON_BODY_BYTES = 64 * 1024
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(host, None)
+        except socket.gaierror:
+            return False
+        resolved: list[object] = []
+        for item in infos:
+            addr = item[4][0]
+            try:
+                resolved.append(ipaddress.ip_address(addr))
+            except ValueError:
+                continue
+        return bool(resolved) and all(address.is_loopback for address in resolved)
+
+
 def start_server(config: BackendConfig) -> RunningServer:
+    if not _is_loopback_host(config.host):
+        has_tls = bool(config.tls_cert_path and config.tls_key_path)
+        if not has_tls and not config.allow_insecure_remote:
+            raise NexusError(
+                "NX-VAL-001",
+                "refusing non-loopback bind without TLS; provide TLS cert+key or --allow-insecure-remote",
+            )
+    if bool(config.tls_cert_path) ^ bool(config.tls_key_path):
+        raise NexusError("NX-VAL-001", "both TLS cert and TLS key must be provided together")
+
     storage = Storage(config.db_path)
     handler = _make_handler(storage)
     server = ThreadingHTTPServer((config.host, config.port), handler)
+    scheme = "http"
+    if config.tls_cert_path and config.tls_key_path:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(config.tls_cert_path), keyfile=str(config.tls_key_path))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return RunningServer(
-        base_url=f"http://{config.host}:{server.server_port}",
+        base_url=f"{scheme}://{config.host}:{server.server_port}",
         _server=server,
         _thread=thread,
     )
@@ -115,12 +160,23 @@ def _make_handler(storage: Storage):
             session_id = self.headers.get("X-Nexus-Session-Id")
             if not session_id:
                 raise NexusError("NX-PRECONDITION-001", "missing session header")
-            return storage.validate_session(session_id)
+            session = storage.validate_session(session_id)
+            supplied_agent_id = self.headers.get("X-Nexus-Agent-Id")
+            if supplied_agent_id and supplied_agent_id != session.agent_id:
+                raise NexusError("NX-PERM-001", "agent header does not match active session")
+            return session
 
         def _read_json(self) -> dict[str, Any]:
-            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                raise NexusError("NX-VAL-001", "invalid content length")
             if length <= 0:
                 return {}
+            if length > _MAX_JSON_BODY_BYTES:
+                # Read and discard to keep HTTP framing stable for clients.
+                self.rfile.read(length)
+                raise NexusError("NX-VAL-001", "request payload too large")
             raw = self.rfile.read(length)
             try:
                 return json.loads(raw.decode("utf-8"))

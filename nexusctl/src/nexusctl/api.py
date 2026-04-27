@@ -1,14 +1,37 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import socket
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from nexusctl.errors import NexusError
 from nexusctl.models import Session
+
+
+def _is_loopback_hostname(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    if hostname.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False
+        addresses = []
+        for info in infos:
+            value = info[4][0]
+            try:
+                addresses.append(ipaddress.ip_address(value))
+            except ValueError:
+                continue
+        return bool(addresses) and all(addr.is_loopback for addr in addresses)
 
 
 class ApiClient:
@@ -20,6 +43,11 @@ class ApiClient:
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> "ApiClient":
         base_url = env.get("NEXUSCTL_API_BASE_URL", "http://127.0.0.1:8080")
+        parsed = urlparse(base_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise NexusError("NX-VAL-001", "NEXUSCTL_API_BASE_URL must start with http:// or https://")
+        if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname):
+            raise NexusError("NX-VAL-001", "insecure http base URL is only allowed for loopback hosts")
         return cls(base_url=base_url)
 
     def auth(self, *, agent_token: str, domain: str | None) -> dict[str, Any]:

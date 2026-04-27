@@ -17,6 +17,10 @@ class SessionStore:
         session = Session.from_auth_response(auth_response)
         sessions_dir = self._sessions_dir_for_write(session.agent_id)
         sessions_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            sessions_dir.chmod(0o700)
+        except OSError:
+            pass
         self._write_json(sessions_dir / f"{session.project_id}.json", session.to_dict())
         self._write_json(sessions_dir / "current.json", session.to_dict())
         return session
@@ -63,7 +67,17 @@ class SessionStore:
 
     @staticmethod
     def _write_json(path: Path, payload: dict) -> None:
-        path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+        temp_path = path.with_suffix(path.suffix + ".tmp")
+        temp_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+        try:
+            temp_path.chmod(0o600)
+        except OSError:
+            pass
+        temp_path.replace(path)
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
 
     @staticmethod
     def _read_json(path: Path) -> dict:

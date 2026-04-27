@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -23,6 +26,115 @@ def _parse_iso(value: str) -> datetime:
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     return datetime.fromisoformat(value).astimezone(timezone.utc)
+
+
+_PBKDF2_ITERATIONS = 200_000
+_RANDOM_ID_HEX_CHARS = 16
+
+
+def _random_id(prefix: str) -> str:
+    return f"{prefix}{secrets.token_hex(_RANDOM_ID_HEX_CHARS // 2)}"
+
+
+def _derive_token_material(token: str, *, salt: str | None = None) -> tuple[str, str]:
+    salt_bytes = bytes.fromhex(salt) if salt is not None else secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), salt_bytes, _PBKDF2_ITERATIONS)
+    return salt_bytes.hex(), digest.hex()
+
+
+def _verify_token(token: str, *, salt: str, digest_hex: str) -> bool:
+    _, computed = _derive_token_material(token, salt=salt)
+    return hmac.compare_digest(computed, digest_hex)
+
+
+def _agent_seed_blueprint() -> list[tuple[str, str, str, str]]:
+    return [
+        ("trading-strategist-01", "trading-strategist", "trading-system", "Trading"),
+        ("sw-techlead-01", "sw-techlead", "trading-system", "Software"),
+        ("sw-builder-01", "sw-builder", "trading-system", "Software"),
+    ]
+
+
+def _resolve_seed_tokens(seed_tokens: dict[str, str] | None) -> dict[str, str]:
+    if seed_tokens is None:
+        return {agent_id: secrets.token_urlsafe(24) for agent_id, _, _, _ in _agent_seed_blueprint()}
+    missing = [agent_id for agent_id, _, _, _ in _agent_seed_blueprint() if agent_id not in seed_tokens]
+    if missing:
+        missing_display = ", ".join(sorted(missing))
+        raise ValueError(f"missing seed token(s) for agent id(s): {missing_display}")
+    return {agent_id: seed_tokens[agent_id] for agent_id, _, _, _ in _agent_seed_blueprint()}
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {row[1] for row in rows}
+
+
+def _prepare_agent_registry_hash_material(conn: sqlite3.Connection) -> None:
+    columns = _table_columns(conn, "agent_registry")
+    if "agent_token_hash" not in columns:
+        conn.execute("ALTER TABLE agent_registry ADD COLUMN agent_token_hash TEXT")
+    if "agent_token_salt" not in columns:
+        conn.execute("ALTER TABLE agent_registry ADD COLUMN agent_token_salt TEXT")
+
+    columns = _table_columns(conn, "agent_registry")
+    if "agent_token" in columns:
+        rows = conn.execute(
+            """
+            SELECT rowid, agent_token, agent_token_hash, agent_token_salt
+            FROM agent_registry
+            """
+        ).fetchall()
+        for rowid, legacy_token, token_hash, token_salt in rows:
+            if token_hash and token_salt:
+                continue
+            material = legacy_token or secrets.token_urlsafe(24)
+            salt_hex, digest_hex = _derive_token_material(material)
+            conn.execute(
+                """
+                UPDATE agent_registry
+                SET agent_token_hash = ?, agent_token_salt = ?
+                WHERE rowid = ?
+                """,
+                (digest_hex, salt_hex, rowid),
+            )
+
+
+def _cutover_agent_registry_to_v2(conn: sqlite3.Connection) -> None:
+    columns = _table_columns(conn, "agent_registry")
+    needs_cutover = "agent_token" in columns or "agent_token_hash" not in columns or "agent_token_salt" not in columns
+    if not needs_cutover:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
+        return
+
+    _prepare_agent_registry_hash_material(conn)
+
+    conn.execute("DROP TABLE IF EXISTS agent_registry__new")
+    conn.executescript(
+        """
+        CREATE TABLE agent_registry__new (
+            agent_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            active INTEGER NOT NULL CHECK(active IN (0, 1)),
+            agent_token_hash TEXT NOT NULL,
+            agent_token_salt TEXT NOT NULL,
+            PRIMARY KEY (agent_id, project_id)
+        );
+        CREATE UNIQUE INDEX idx_agent_registry__new_token_hash ON agent_registry__new(agent_token_hash);
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO agent_registry__new(agent_id, role, project_id, domain, active, agent_token_hash, agent_token_salt)
+        SELECT agent_id, role, project_id, domain, active, agent_token_hash, agent_token_salt
+        FROM agent_registry
+        """
+    )
+    conn.execute("DROP TABLE agent_registry")
+    conn.execute("ALTER TABLE agent_registry__new RENAME TO agent_registry")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
 
 
 def initialize_database(db_path: Path) -> None:
@@ -98,36 +210,41 @@ def initialize_database(db_path: Path) -> None:
             );
 
             CREATE TABLE IF NOT EXISTS agent_registry (
-                agent_token TEXT PRIMARY KEY,
                 agent_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 project_id TEXT NOT NULL,
                 domain TEXT NOT NULL,
-                active INTEGER NOT NULL CHECK(active IN (0, 1))
+                active INTEGER NOT NULL CHECK(active IN (0, 1)),
+                agent_token_hash TEXT NOT NULL,
+                agent_token_salt TEXT NOT NULL,
+                PRIMARY KEY (agent_id, project_id)
             );
             """
         )
+        _cutover_agent_registry_to_v2(conn)
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
         conn.commit()
     finally:
         conn.close()
 
 
-def seed_mvp_data(db_path: Path) -> None:
+def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -> dict[str, str] | None:
     conn = sqlite3.connect(db_path)
     try:
         existing = conn.execute("SELECT COUNT(*) FROM capabilities").fetchone()[0]
         if existing > 0:
-            return
+            return None
+        resolved_tokens = _resolve_seed_tokens(seed_tokens)
+        agent_rows: list[tuple[str, str, str, str, str, str, int]] = []
+        for agent_id, role, project_id, domain in _agent_seed_blueprint():
+            salt_hex, digest_hex = _derive_token_material(resolved_tokens[agent_id])
+            agent_rows.append((agent_id, role, project_id, domain, 1, digest_hex, salt_hex))
         conn.executemany(
             """
-            INSERT INTO agent_registry(agent_token, agent_id, role, project_id, domain, active)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO agent_registry(agent_id, role, project_id, domain, active, agent_token_hash, agent_token_salt)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            [
-                ("tok_trading", "trading-strategist-01", "trading-strategist", "trading-system", "Trading", 1),
-                ("tok_techlead", "sw-techlead-01", "sw-techlead", "trading-system", "Software", 1),
-                ("tok_builder", "sw-builder-01", "sw-builder", "trading-system", "Software", 1),
-            ],
+            agent_rows,
         )
         conn.executemany(
             "INSERT INTO capabilities(capability_id, domain, title, status) VALUES (?, ?, ?, ?)",
@@ -179,6 +296,7 @@ def seed_mvp_data(db_path: Path) -> None:
             ],
         )
         conn.commit()
+        return resolved_tokens
     finally:
         conn.close()
 
@@ -206,22 +324,37 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                row = conn.execute(
+                rows = conn.execute(
                     """
-                    SELECT agent_id, role, project_id, domain, active
+                    SELECT agent_id, role, project_id, domain, active, agent_token_hash, agent_token_salt
                     FROM agent_registry
-                    WHERE agent_token = ?
+                    WHERE active = 1
                     """,
-                    (agent_token,),
-                ).fetchone()
-                if row is None or row["active"] != 1:
+                ).fetchall()
+                row = next(
+                    (
+                        item
+                        for item in rows
+                        if item["agent_token_hash"]
+                        and item["agent_token_salt"]
+                        and _verify_token(
+                            agent_token,
+                            salt=item["agent_token_salt"],
+                            digest_hex=item["agent_token_hash"],
+                        )
+                    ),
+                    None,
+                )
+                if row is None:
                     raise NexusError("NX-PERM-001", "invalid or inactive token")
+                if domain and domain != row["domain"]:
+                    raise NexusError("NX-PERM-001", "token is not valid for requested domain")
 
-                auth_id = self._next_id(conn, "auth_log", "auth_id", "AUTH-2026-")
-                session_id = self._next_id(conn, "agent_sessions", "session_id", "S-2026-")
+                auth_id = _random_id("AUTH-2026-")
+                session_id = _random_id("S-2026-")
                 timestamp = _utc_now()
                 expires_at = timestamp + timedelta(minutes=60)
-                resolved_domain = domain or row["domain"]
+                resolved_domain = row["domain"]
                 conn.execute(
                     """
                     INSERT INTO agent_sessions(session_id, agent_id, role, project_id, domain, status, issued_at, expires_at)
@@ -378,7 +511,7 @@ class Storage:
                 ):
                     raise NexusError("NX-PRECONDITION-003", "evidence incomplete")
 
-                event_id = self._next_id(conn, "capability_status_events", "event_id", "CAP-STATUS-2026-")
+                event_id = _random_id("CAP-STATUS-2026-")
                 timestamp = _iso(_utc_now())
                 conn.execute(
                     "UPDATE capabilities SET status = ? WHERE capability_id = ?",
@@ -420,11 +553,6 @@ class Storage:
                 }
             finally:
                 conn.close()
-
-    @staticmethod
-    def _next_id(conn: sqlite3.Connection, table: str, column: str, prefix: str) -> str:
-        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        return f"{prefix}{count + 1:04d}"
 
     @staticmethod
     def _query_capabilities(conn: sqlite3.Connection, *, status_filter: str, domain: str | None) -> list[dict[str, Any]]:

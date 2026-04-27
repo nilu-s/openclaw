@@ -10,6 +10,13 @@ from nexusctl.backend.server import BackendConfig, RunningServer, start_server
 from nexusctl.backend.storage import initialize_database, seed_mvp_data
 
 
+TEST_SEED_TOKENS = {
+    "trading-strategist-01": "tok_trading",
+    "sw-techlead-01": "tok_techlead",
+    "sw-builder-01": "tok_builder",
+}
+
+
 @dataclass
 class BackendServer:
     base_url: str
@@ -40,7 +47,7 @@ class BackendServer:
 def backend_server(tmp_path: Path) -> BackendServer:
     db_path = tmp_path / "nexusctl.sqlite3"
     initialize_database(db_path)
-    seed_mvp_data(db_path)
+    seed_mvp_data(db_path, seed_tokens=TEST_SEED_TOKENS)
     config = BackendConfig(host="127.0.0.1", port=0, db_path=db_path)
     running = start_server(config)
     instance = BackendServer(base_url=running.base_url, db_path=db_path, _running=running)

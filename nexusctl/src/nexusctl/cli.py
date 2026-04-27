@@ -61,10 +61,10 @@ def run(
     err = err or sys.stderr
 
     parser = build_parser()
-    api = ApiClient.from_env(env)
-    sessions = SessionStore(env)
 
     try:
+        api = ApiClient.from_env(env)
+        sessions = SessionStore(env)
         args = parser.parse_args(argv)
         if args.command == "auth":
             return _run_auth(args, api=api, sessions=sessions, env=env, out=out)
