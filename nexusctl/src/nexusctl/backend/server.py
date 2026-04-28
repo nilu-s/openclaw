@@ -122,6 +122,41 @@ def _make_handler(storage: Storage):
                     self._send_json(200, result)
                     return
 
+                if path == "/v1/nexus/handoffs":
+                    session = self._require_session()
+                    objective = payload.get("objective")
+                    missing_capability = payload.get("missing_capability")
+                    business_impact = payload.get("business_impact")
+                    expected_behavior = payload.get("expected_behavior")
+                    acceptance_criteria = payload.get("acceptance_criteria")
+                    risk_class = payload.get("risk_class")
+                    priority = payload.get("priority")
+                    trading_goals_ref = payload.get("trading_goals_ref")
+                    if (
+                        not isinstance(objective, str)
+                        or not isinstance(missing_capability, str)
+                        or not isinstance(business_impact, str)
+                        or not isinstance(expected_behavior, str)
+                        or not isinstance(acceptance_criteria, list)
+                        or not isinstance(risk_class, str)
+                        or not isinstance(priority, str)
+                        or not isinstance(trading_goals_ref, str)
+                    ):
+                        raise NexusError("NX-VAL-001", "invalid handoff payload")
+                    result = storage.submit_handoff(
+                        actor=session,
+                        objective=objective,
+                        missing_capability=missing_capability,
+                        business_impact=business_impact,
+                        expected_behavior=expected_behavior,
+                        acceptance_criteria=acceptance_criteria,
+                        risk_class=risk_class,
+                        priority=priority,
+                        trading_goals_ref=trading_goals_ref,
+                    )
+                    self._send_json(200, result)
+                    return
+
                 raise NexusError("NX-NOTFOUND-001", "route not found")
             except NexusError as exc:
                 self._send_error_json(exc)

@@ -88,6 +88,37 @@ class ApiClient:
             retry_once=False,
         )
 
+    def submit_handoff(
+        self,
+        *,
+        session: Session,
+        objective: str,
+        missing_capability: str,
+        business_impact: str,
+        expected_behavior: str,
+        acceptance_criteria: list[str],
+        risk_class: str,
+        priority: str,
+        trading_goals_ref: str,
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/v1/nexus/handoffs",
+            payload={
+                "objective": objective,
+                "missing_capability": missing_capability,
+                "business_impact": business_impact,
+                "expected_behavior": expected_behavior,
+                "acceptance_criteria": acceptance_criteria,
+                "risk_class": risk_class,
+                "priority": priority,
+                "trading_goals_ref": trading_goals_ref,
+            },
+            headers=self._session_headers(session),
+            timeout=self._timeout_seconds,
+            retry_once=False,
+        )
+
     @staticmethod
     def _session_headers(session: Session) -> dict[str, str]:
         return {

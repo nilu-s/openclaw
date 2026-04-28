@@ -27,6 +27,8 @@ Nicht im Scope:
 
 Ein Handoff ist ein eindeutiges Objekt mit stabiler ID (z. B. `HC-2026-0001`).
 - Capability-Preflight vor Handoff-Entscheidungen ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
+- Die Trading-Lane darf fuer diesen Preflight `nexusctl auth`, `nexusctl capabilities list` und `nexusctl capabilities show` nutzen.
+- Die Trading-Lane darf auf Basis dieser CLI-Informationen Capability-Bedarf vorschlagen; finale Einreichungsentscheidung bleibt bei `trading-strategist`.
 Eine vollstaendige Handoff-Steuerung per `nexusctl` ist Phase-2-Zielbild.
 
 Pflichtfelder bei Einreichung durch Trading:

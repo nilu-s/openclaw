@@ -8,6 +8,7 @@ CLI + Backend fuer Capability-Preflight und Capability-Status im OpenClaw-MVP.
 - `capabilities list`
 - `capabilities show`
 - `capabilities set-status` (lokal bereits auf `sw-techlead` + `--to available` begrenzt)
+- `handoff submit` (nur `trading-strategist`, persistiert Handoff im Backend)
 - `nexusctl-server` (echter HTTP-Service mit SQLite-Persistenz)
 - Session-Store mit TTL-Check
 - Exit-Code- und Fehlercode-Mapping gemaess `NEXUSCTL_FUNCTIONS.md`
@@ -35,6 +36,7 @@ nexusctl auth --agent-token "$NEXUS_AGENT_TOKEN" --output table
 nexusctl capabilities list --status all --output table
 nexusctl capabilities show F-001 --output json
 nexusctl capabilities set-status F-002 --to available --reason "All requirements verified and evidence linked." --output json
+nexusctl handoff submit --objective "Reduce reaction latency for risk-limit breaches." --missing-capability "Automatic hard-stop trigger when risk threshold is exceeded." --business-impact "Prevents prolonged exposure during volatility spikes." --expected-behavior "System halts new entries within breach window." --acceptance-criteria "Given threshold breach, new entries are blocked within 500ms." --risk-class high --priority P1 --trading-goals-ref "trading-goal://risk/limit-hard-stop" --output json
 ```
 
 ## Konfiguration (Env)
@@ -71,3 +73,4 @@ Enthalten sind:
 
 - Unit-Tests fuer Validierung, Rollen- und Exit-Code-Verhalten
 - Integrations-/AC-Tests fuer AC-001 bis AC-009 gegen echten `nexusctl-server` mit echter SQLite-DB
+- Integrations-/AC-Tests fuer AC-001 bis AC-011 gegen echten `nexusctl-server` mit echter SQLite-DB

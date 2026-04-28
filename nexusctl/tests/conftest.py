@@ -11,9 +11,15 @@ from nexusctl.backend.storage import initialize_database, seed_mvp_data
 
 
 TEST_SEED_TOKENS = {
+    "main-01": "tok_main",
+    "nexus-01": "tok_nexus",
+    "sw-architect-01": "tok_architect",
     "trading-strategist-01": "tok_trading",
+    "trading-analyst-01": "tok_analyst",
+    "trading-sentinel-01": "tok_sentinel",
     "sw-techlead-01": "tok_techlead",
     "sw-builder-01": "tok_builder",
+    "sw-reviewer-01": "tok_reviewer",
 }
 
 

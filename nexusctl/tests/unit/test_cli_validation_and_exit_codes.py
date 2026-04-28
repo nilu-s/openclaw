@@ -71,3 +71,59 @@ def test_precondition_error_for_short_reason(cli_env):
 def test_precondition_error_for_missing_session(cli_env):
     rc = run(["capabilities", "list"], env=cli_env)
     assert rc == 6
+
+
+def test_validation_error_for_handoff_submit_missing_acceptance_criteria(cli_env):
+    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="trading-strategist")
+    rc = run(
+        [
+            "handoff",
+            "submit",
+            "--objective",
+            "Reduce reaction latency for risk-limit breaches.",
+            "--missing-capability",
+            "Automatic hard-stop trigger for threshold breaches.",
+            "--business-impact",
+            "Reduces prolonged exposure during volatility spikes.",
+            "--expected-behavior",
+            "System blocks new entries immediately after breach detection.",
+            "--risk-class",
+            "high",
+            "--priority",
+            "P1",
+            "--trading-goals-ref",
+            "trading-goal://risk/limit-hard-stop",
+        ],
+        env=cli_env,
+    )
+    assert rc == 2
+
+
+def test_permission_denied_for_non_trading_strategist_handoff_submit(cli_env):
+    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
+    rc = run(
+        [
+            "handoff",
+            "submit",
+            "--objective",
+            "Reduce reaction latency for risk-limit breaches.",
+            "--missing-capability",
+            "Automatic hard-stop trigger for threshold breaches.",
+            "--business-impact",
+            "Reduces prolonged exposure during volatility spikes.",
+            "--expected-behavior",
+            "System blocks new entries immediately after breach detection.",
+            "--acceptance-criteria",
+            "Given threshold breach, new entries are blocked within 500ms.",
+            "--risk-class",
+            "high",
+            "--priority",
+            "P1",
+            "--trading-goals-ref",
+            "trading-goal://risk/limit-hard-stop",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+    )
+    assert rc == 4

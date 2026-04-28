@@ -46,6 +46,20 @@ def build_parser() -> argparse.ArgumentParser:
     cap_set.add_argument("--reason", required=True)
     cap_set.add_argument("--output", choices=["table", "json"], default="table")
 
+    handoff = subparsers.add_parser("handoff")
+    handoff_subparsers = handoff.add_subparsers(dest="handoff_command", required=True)
+
+    handoff_submit = handoff_subparsers.add_parser("submit")
+    handoff_submit.add_argument("--objective", required=True)
+    handoff_submit.add_argument("--missing-capability", required=True, dest="missing_capability")
+    handoff_submit.add_argument("--business-impact", required=True, dest="business_impact")
+    handoff_submit.add_argument("--expected-behavior", required=True, dest="expected_behavior")
+    handoff_submit.add_argument("--acceptance-criteria", action="append", required=True, dest="acceptance_criteria")
+    handoff_submit.add_argument("--risk-class", choices=["low", "medium", "high", "critical"], required=True, dest="risk_class")
+    handoff_submit.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], required=True)
+    handoff_submit.add_argument("--trading-goals-ref", required=True, dest="trading_goals_ref")
+    handoff_submit.add_argument("--output", choices=["table", "json"], default="table")
+
     return parser
 
 
@@ -70,6 +84,8 @@ def run(
             return _run_auth(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "capabilities":
             return _run_capabilities(args, api=api, sessions=sessions, out=out)
+        if args.command == "handoff":
+            return _run_handoff(args, api=api, sessions=sessions, out=out)
         raise NexusError("NX-VAL-001", "unknown command")
     except NexusError as exc:
         err.write(f"{exc.code}: {exc.message}\n")
@@ -115,6 +131,36 @@ def _run_capabilities(args: argparse.Namespace, *, api: ApiClient, sessions: Ses
         return EXIT_SUCCESS
 
     raise NexusError("NX-VAL-001", "unknown capabilities command")
+
+
+def _run_handoff(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, out: TextIO) -> int:
+    if args.handoff_command == "submit":
+        session = sessions.load_active()
+        if session.role != "trading-strategist":
+            raise NexusError("NX-PERM-001", "only trading-strategist may submit handoff")
+
+        objective = _require_text(args.objective, field="objective")
+        missing_capability = _require_text(args.missing_capability, field="missing-capability")
+        business_impact = _require_text(args.business_impact, field="business-impact")
+        expected_behavior = _require_text(args.expected_behavior, field="expected-behavior")
+        trading_goals_ref = _require_text(args.trading_goals_ref, field="trading-goals-ref")
+        criteria = [_require_text(item, field="acceptance-criteria") for item in args.acceptance_criteria]
+
+        payload = api.submit_handoff(
+            session=session,
+            objective=objective,
+            missing_capability=missing_capability,
+            business_impact=business_impact,
+            expected_behavior=expected_behavior,
+            acceptance_criteria=criteria,
+            risk_class=args.risk_class,
+            priority=args.priority,
+            trading_goals_ref=trading_goals_ref,
+        )
+        _emit_handoff_submit(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+
+    raise NexusError("NX-VAL-001", "unknown handoff command")
 
 
 def _validate_capability_id(value: str) -> None:
@@ -189,3 +235,37 @@ def _emit_set_status(*, out: TextIO, output: str, payload: dict) -> None:
             ("timestamp", str(payload.get("timestamp", ""))),
         ],
     )
+
+
+def _emit_handoff_submit(*, out: TextIO, output: str, payload: dict) -> None:
+    if output == "json":
+        write_json(out, payload)
+        return
+    criteria = payload.get("acceptance_criteria", [])
+    criteria_display = " | ".join(str(item) for item in criteria) if isinstance(criteria, list) else ""
+    write_key_values(
+        out,
+        [
+            ("ok", str(payload.get("ok", True))),
+            ("handoff_id", str(payload.get("handoff_id", ""))),
+            ("status", str(payload.get("status", ""))),
+            ("objective", str(payload.get("objective", ""))),
+            ("missing_capability", str(payload.get("missing_capability", ""))),
+            ("business_impact", str(payload.get("business_impact", ""))),
+            ("expected_behavior", str(payload.get("expected_behavior", ""))),
+            ("acceptance_criteria", criteria_display),
+            ("risk_class", str(payload.get("risk_class", ""))),
+            ("priority", str(payload.get("priority", ""))),
+            ("trading_goals_ref", str(payload.get("trading_goals_ref", ""))),
+            ("agent_id", str(payload.get("agent_id", ""))),
+            ("project_id", str(payload.get("project_id", ""))),
+            ("timestamp", str(payload.get("timestamp", ""))),
+        ],
+    )
+
+
+def _require_text(value: str, *, field: str) -> str:
+    text = value.strip()
+    if not text:
+        raise NexusError("NX-VAL-001", f"--{field} must not be empty")
+    return text

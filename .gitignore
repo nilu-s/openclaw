@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+nexusctl/.nexusctl/
+nexusctl/.tmp-*/
+*.sqlite3
+*.bundle

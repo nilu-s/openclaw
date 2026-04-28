@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import json
+
 from nexusctl.cli import run
 
 
@@ -96,3 +99,84 @@ def test_ac_009_set_status_rejects_when_gate_fails(cli_env):
         env=cli_env,
     )
     assert rc == 6
+
+
+def test_ac_010_trading_strategist_can_submit_handoff(cli_env, backend_server):
+    assert run(["auth", "--agent-token", "tok_trading", "--output", "json"], env=cli_env) == 0
+    out = io.StringIO()
+    err = io.StringIO()
+    rc = run(
+        [
+            "handoff",
+            "submit",
+            "--objective",
+            "Reduce reaction latency for risk-limit breaches.",
+            "--missing-capability",
+            "Automatic hard-stop trigger when risk threshold is exceeded.",
+            "--business-impact",
+            "Prevents prolonged exposure during volatility spikes.",
+            "--expected-behavior",
+            "System halts new entries within breach window.",
+            "--acceptance-criteria",
+            "Given threshold breach, new entries are blocked within 500ms.",
+            "--acceptance-criteria",
+            "Event is logged with timestamp and breach metadata.",
+            "--risk-class",
+            "high",
+            "--priority",
+            "P1",
+            "--trading-goals-ref",
+            "trading-goal://risk/limit-hard-stop",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+        out=out,
+        err=err,
+    )
+    assert rc == 0, err.getvalue()
+    payload = json.loads(out.getvalue())
+    assert payload["ok"] is True
+    assert payload["status"] == "submitted"
+    assert payload["risk_class"] == "high"
+    assert payload["priority"] == "P1"
+    assert payload["agent_id"] == "trading-strategist-01"
+
+    rows = backend_server.fetchall(
+        "SELECT handoff_id, status, submitted_by_agent_id, project_id FROM handoff_requests"
+    )
+    assert len(rows) == 1
+    assert rows[0][0].startswith("HC-2026-")
+    assert rows[0][1] == "submitted"
+    assert rows[0][2] == "trading-strategist-01"
+    assert rows[0][3] == "trading-system"
+
+
+def test_ac_011_handoff_submit_rejects_non_trading_strategist(cli_env):
+    assert run(["auth", "--agent-token", "tok_techlead", "--output", "json"], env=cli_env) == 0
+    rc = run(
+        [
+            "handoff",
+            "submit",
+            "--objective",
+            "Reduce reaction latency for risk-limit breaches.",
+            "--missing-capability",
+            "Automatic hard-stop trigger when risk threshold is exceeded.",
+            "--business-impact",
+            "Prevents prolonged exposure during volatility spikes.",
+            "--expected-behavior",
+            "System halts new entries within breach window.",
+            "--acceptance-criteria",
+            "Given threshold breach, new entries are blocked within 500ms.",
+            "--risk-class",
+            "high",
+            "--priority",
+            "P1",
+            "--trading-goals-ref",
+            "trading-goal://risk/limit-hard-stop",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+    )
+    assert rc == 4

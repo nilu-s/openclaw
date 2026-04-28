@@ -8,6 +8,7 @@ Implementierte Backend-Erwartung fuer die Python-CLI.
 2. `GET /v1/nexus/capabilities`
 3. `GET /v1/nexus/capabilities/{capability_id}`
 4. `POST /v1/nexus/capabilities/{capability_id}/status`
+5. `POST /v1/nexus/handoffs`
 
 ## Header
 
@@ -31,6 +32,23 @@ Implementierte Backend-Erwartung fuer die Python-CLI.
 {
   "to": "available",
   "reason": "All requirements verified and evidence linked."
+}
+```
+
+### Handoff Submit
+
+```json
+{
+  "objective": "Reduce reaction latency for risk-limit breaches.",
+  "missing_capability": "Automatic hard-stop trigger when risk threshold is exceeded.",
+  "business_impact": "Prevents prolonged exposure during volatility spikes.",
+  "expected_behavior": "System halts new entries within breach window.",
+  "acceptance_criteria": [
+    "Given threshold breach, new entries are blocked within 500ms."
+  ],
+  "risk_class": "high",
+  "priority": "P1",
+  "trading_goals_ref": "trading-goal://risk/limit-hard-stop"
 }
 ```
 

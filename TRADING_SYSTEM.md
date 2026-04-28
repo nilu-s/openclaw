@@ -70,6 +70,8 @@ Dieses Dokument regelt ausschliesslich die Trading-Lane:
 5. Capability-Bedarf:
 - Bei fehlender Capability wird ein formaler Handoff an die Software-Lane erzeugt.
 - Capability-Preflight vor Strategie-/Handoff-Entscheidungen ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
+- Die Trading-Lane ist berechtigt, fuer diesen Preflight `nexusctl auth`, `nexusctl capabilities list` und `nexusctl capabilities show` zu nutzen.
+- Die Trading-Lane darf auf Basis dieser CLI-Informationen Capability-Bedarf vorschlagen; die finale Handoff-Einreichung bleibt bei `trading-strategist`.
 
 ---
 

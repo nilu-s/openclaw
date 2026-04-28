@@ -30,6 +30,8 @@ def _parse_iso(value: str) -> datetime:
 
 _PBKDF2_ITERATIONS = 200_000
 _RANDOM_ID_HEX_CHARS = 16
+_HANDOFF_RISK_CLASSES = {"low", "medium", "high", "critical"}
+_HANDOFF_PRIORITIES = {"P0", "P1", "P2", "P3"}
 
 
 def _random_id(prefix: str) -> str:
@@ -49,9 +51,15 @@ def _verify_token(token: str, *, salt: str, digest_hex: str) -> bool:
 
 def _agent_seed_blueprint() -> list[tuple[str, str, str, str]]:
     return [
+        ("main-01", "main", "trading-system", "Control"),
+        ("nexus-01", "nexus", "trading-system", "Control"),
+        ("sw-architect-01", "sw-architect", "trading-system", "Software"),
         ("trading-strategist-01", "trading-strategist", "trading-system", "Trading"),
+        ("trading-analyst-01", "trading-analyst", "trading-system", "Trading"),
+        ("trading-sentinel-01", "trading-sentinel", "trading-system", "Trading"),
         ("sw-techlead-01", "sw-techlead", "trading-system", "Software"),
         ("sw-builder-01", "sw-builder", "trading-system", "Software"),
+        ("sw-reviewer-01", "sw-reviewer", "trading-system", "Software"),
     ]
 
 
@@ -68,6 +76,15 @@ def _resolve_seed_tokens(seed_tokens: dict[str, str] | None) -> dict[str, str]:
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return {row[1] for row in rows}
+
+
+def _required_text(value: str, *, field: str) -> str:
+    if not isinstance(value, str):
+        raise NexusError("NX-VAL-001", f"{field} must be a string")
+    text = value.strip()
+    if not text:
+        raise NexusError("NX-VAL-001", f"missing {field}")
+    return text
 
 
 def _prepare_agent_registry_hash_material(conn: sqlite3.Connection) -> None:
@@ -219,6 +236,25 @@ def initialize_database(db_path: Path) -> None:
                 agent_token_salt TEXT NOT NULL,
                 PRIMARY KEY (agent_id, project_id)
             );
+
+            CREATE TABLE IF NOT EXISTS handoff_requests (
+                handoff_id TEXT PRIMARY KEY,
+                dedupe_key TEXT NOT NULL UNIQUE,
+                objective TEXT NOT NULL,
+                missing_capability TEXT NOT NULL,
+                business_impact TEXT NOT NULL,
+                expected_behavior TEXT NOT NULL,
+                acceptance_criteria_json TEXT NOT NULL,
+                risk_class TEXT NOT NULL CHECK(risk_class IN ('low', 'medium', 'high', 'critical')),
+                priority TEXT NOT NULL CHECK(priority IN ('P0', 'P1', 'P2', 'P3')),
+                trading_goals_ref TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('submitted')),
+                submitted_by_agent_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
         _cutover_agent_registry_to_v2(conn)
@@ -249,7 +285,7 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
         conn.executemany(
             "INSERT INTO capabilities(capability_id, domain, title, status) VALUES (?, ?, ?, ?)",
             [
-                ("F-001", "Trading", "Paper Trading", "available"),
+                ("F-001", "Trading", "Paper Trading", "planned"),
                 ("F-002", "Trading", "Kraken API Integration", "planned"),
             ],
         )
@@ -263,7 +299,7 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
                     "F-001",
                     json.dumps(["SF-001.1", "SF-001.2"]),
                     json.dumps(["FR-001.1.1", "FR-001.2.1"]),
-                    "verified",
+                    "planned",
                 ),
                 (
                     "F-002",
@@ -279,10 +315,10 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
             VALUES (?, ?, ?)
             """,
             [
-                ("F-001", "FR-001.1.1", "verified"),
-                ("F-001", "FR-001.2.1", "verified"),
-                ("F-002", "FR-002.1.1", "implemented"),
-                ("F-002", "FR-002.1.2", "in-progress"),
+                ("F-001", "FR-001.1.1", "not-started"),
+                ("F-001", "FR-001.2.1", "not-started"),
+                ("F-002", "FR-002.1.1", "not-started"),
+                ("F-002", "FR-002.1.2", "not-started"),
             ],
         )
         conn.executemany(
@@ -291,7 +327,7 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
             VALUES (?, ?, ?, ?)
             """,
             [
-                ("F-001", "issue://101", "pr://101", "test://101"),
+                ("F-001", "none", "none", "none"),
                 ("F-002", "none", "none", "none"),
             ],
         )
@@ -550,6 +586,160 @@ class Storage:
                     "agent_id": actor.agent_id,
                     "project_id": actor.project_id,
                     "timestamp": timestamp,
+                }
+            finally:
+                conn.close()
+
+    def submit_handoff(
+        self,
+        *,
+        actor: SessionContext,
+        objective: str,
+        missing_capability: str,
+        business_impact: str,
+        expected_behavior: str,
+        acceptance_criteria: list[str],
+        risk_class: str,
+        priority: str,
+        trading_goals_ref: str,
+    ) -> dict[str, Any]:
+        if actor.role != "trading-strategist":
+            raise NexusError("NX-PERM-001", "only trading-strategist may submit handoff")
+
+        objective = _required_text(objective, field="objective")
+        missing_capability = _required_text(missing_capability, field="missing_capability")
+        business_impact = _required_text(business_impact, field="business_impact")
+        expected_behavior = _required_text(expected_behavior, field="expected_behavior")
+        trading_goals_ref = _required_text(trading_goals_ref, field="trading_goals_ref")
+        if risk_class not in _HANDOFF_RISK_CLASSES:
+            raise NexusError("NX-VAL-001", "invalid risk_class")
+        if priority not in _HANDOFF_PRIORITIES:
+            raise NexusError("NX-VAL-001", "invalid priority")
+        if not acceptance_criteria:
+            raise NexusError("NX-VAL-001", "missing acceptance_criteria")
+        normalized_criteria = [_required_text(item, field="acceptance_criteria") for item in acceptance_criteria]
+
+        dedupe_payload = {
+            "project_id": actor.project_id,
+            "objective": objective,
+            "missing_capability": missing_capability,
+            "business_impact": business_impact,
+            "expected_behavior": expected_behavior,
+            "acceptance_criteria": normalized_criteria,
+            "risk_class": risk_class,
+            "priority": priority,
+            "trading_goals_ref": trading_goals_ref,
+        }
+        dedupe_key = hashlib.sha256(
+            json.dumps(dedupe_payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        ).hexdigest()
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                timestamp = _iso(_utc_now())
+                row = conn.execute(
+                    "SELECT handoff_id, created_at FROM handoff_requests WHERE dedupe_key = ?",
+                    (dedupe_key,),
+                ).fetchone()
+                updated_existing = row is not None
+                if row is None:
+                    handoff_id = _random_id("HC-2026-")
+                    created_at = timestamp
+                    conn.execute(
+                        """
+                        INSERT INTO handoff_requests(
+                            handoff_id,
+                            dedupe_key,
+                            objective,
+                            missing_capability,
+                            business_impact,
+                            expected_behavior,
+                            acceptance_criteria_json,
+                            risk_class,
+                            priority,
+                            trading_goals_ref,
+                            status,
+                            submitted_by_agent_id,
+                            project_id,
+                            domain,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            handoff_id,
+                            dedupe_key,
+                            objective,
+                            missing_capability,
+                            business_impact,
+                            expected_behavior,
+                            json.dumps(normalized_criteria, ensure_ascii=True),
+                            risk_class,
+                            priority,
+                            trading_goals_ref,
+                            actor.agent_id,
+                            actor.project_id,
+                            actor.domain,
+                            created_at,
+                            timestamp,
+                        ),
+                    )
+                else:
+                    handoff_id = row["handoff_id"]
+                    created_at = row["created_at"]
+                    conn.execute(
+                        """
+                        UPDATE handoff_requests
+                        SET
+                            objective = ?,
+                            missing_capability = ?,
+                            business_impact = ?,
+                            expected_behavior = ?,
+                            acceptance_criteria_json = ?,
+                            risk_class = ?,
+                            priority = ?,
+                            trading_goals_ref = ?,
+                            submitted_by_agent_id = ?,
+                            domain = ?,
+                            updated_at = ?
+                        WHERE handoff_id = ?
+                        """,
+                        (
+                            objective,
+                            missing_capability,
+                            business_impact,
+                            expected_behavior,
+                            json.dumps(normalized_criteria, ensure_ascii=True),
+                            risk_class,
+                            priority,
+                            trading_goals_ref,
+                            actor.agent_id,
+                            actor.domain,
+                            timestamp,
+                            handoff_id,
+                        ),
+                    )
+                conn.commit()
+                return {
+                    "ok": True,
+                    "handoff_id": handoff_id,
+                    "status": "submitted",
+                    "objective": objective,
+                    "missing_capability": missing_capability,
+                    "business_impact": business_impact,
+                    "expected_behavior": expected_behavior,
+                    "acceptance_criteria": normalized_criteria,
+                    "risk_class": risk_class,
+                    "priority": priority,
+                    "trading_goals_ref": trading_goals_ref,
+                    "agent_id": actor.agent_id,
+                    "project_id": actor.project_id,
+                    "domain": actor.domain,
+                    "timestamp": timestamp,
+                    "created_at": created_at,
+                    "updated_existing": updated_existing,
                 }
             finally:
                 conn.close()
