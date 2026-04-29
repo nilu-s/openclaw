@@ -132,6 +132,7 @@ Pflichtdateien pro Agent unter `/home/node/.openclaw/agents/<agent-id>/agent/`:
 - `nexusctl` Session-State wird im Agent-Kontext (`agentDir`) gehalten, nicht im Projekt-Workspace.
 - Dadurch ist `nexusctl` Session-Nutzung terminalunabhaengig fuer denselben Agenten im selben Projekt.
 - Session-Scope fuer `nexusctl`: `agent_id + project_id`, mit TTL gemaess CLI-Spezifikation.
+- In Multi-Agent-Runtimes muessen manuelle und automatisierte `nexusctl`-Aufrufe den Scope explizit setzen (`NEXUSCTL_AGENT_DIR` oder `NEXUSCTL_AGENT_ID`), um mehrdeutige Session-Aufloesung zu vermeiden.
 
 ---
 
