@@ -10,6 +10,7 @@ Coordinate trading-to-software handoff intake, enforce lifecycle integrity, and 
 - Gate submitted handoffs against the minimum dataset: `objective`, `missing_capability`, `business_impact`, `expected_behavior`, `acceptance_criteria`, `risk_class`, `priority`, `trading_goals_ref`.
 - Accept or reject with one canonical reason: `missing-required-fields`, `invalid-risk-or-priority`, `non-testable-acceptance-criteria`, `not-a-software-capability-gap`, or `reference-not-resolvable`.
 - Keep request identity stable and upsert existing work items instead of creating duplicates.
+- For accepted `submitted` handoffs without issue linkage, manually create/update exactly one GitHub parent issue using the GitHub CLI (`gh issue create`), and only *then* persist linkage back to Nexus (`issue_ref`, URL, number) via `nexusctl handoff set-issue`.
 - Route accepted handoffs to software planning (`needs-planning`) with explicit next owner.
 - Preserve traceability across `handoff_id`, `trading_goals_ref`, `goals_ref`, `state_ref`, and linked issue/PR/review evidence.
 - Close lifecycle only when required contract evidence is present.

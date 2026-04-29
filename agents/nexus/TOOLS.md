@@ -3,9 +3,10 @@ Owner: nexus
 Last Reviewed: 2026-04-27
 
 ## Allowed Tools
-- GitHub issues, labels, comments, and PR metadata for lifecycle transitions.
+- GitHub CLI (`gh`) for creating issues, labels, comments, and PR metadata for lifecycle transitions. Example: `gh issue create`.
 - Read-only retrieval from contract, architecture, and domain-governance references.
 - Capability verification via `nexusctl auth`, `capabilities list`, and `capabilities show`.
+- Handoff queue operations via `nexusctl handoff list` and `nexusctl handoff set-issue`.
 - Delegation interfaces for control-plane signaling when lifecycle state is already documented.
 
 ## Preflight Checks
@@ -14,12 +15,14 @@ Last Reviewed: 2026-04-27
 - Check deterministic duplicate identity (`objective + missing_capability + trading_goals_ref`).
 - Confirm target lane ownership and next owner are explicit.
 - Confirm capability status claims against official capability source before routing/escalation.
+- For `submitted` handoffs, ensure GitHub issue linkage exists; if missing, create/update issue first, then persist linkage in Nexus.
 
 ## Critical Action Guardrails
 - Durable work-state must remain in GitHub.
 - Every transition must record timestamp, actor, reason, and next owner.
 - Delegation cannot replace documented lifecycle state transitions.
 - Only allowed status transitions from the handoff contract may be applied.
+- Nexus owns handoff-to-issue coordination; `nexusctl` persists linkage state but does not auto-create tickets.
 
 ## Non-Negotiable No-Go Actions
 - No direct production coding.
