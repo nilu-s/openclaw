@@ -28,6 +28,19 @@ def test_validation_error_when_token_missing(cli_env):
     assert rc == 2
 
 
+def test_auth_uses_seed_token_for_openclaw_agent_id(cli_env, tmp_path):
+    seed_file = tmp_path / "seed_tokens.env"
+    seed_file.write_text("sw-techlead-01=tok_techlead\n", encoding="utf-8")
+    env = {
+        **cli_env,
+        "OPENCLAW_AGENT_ID": "sw-techlead",
+        "NEXUSCTL_SEED_TOKENS_FILE": str(seed_file),
+    }
+
+    rc = run(["auth", "--output", "json"], env=env)
+    assert rc == 0
+
+
 def test_validation_error_for_invalid_capability_id(cli_env):
     _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]))
     rc = run(["capabilities", "show", "invalid-id"], env=cli_env)
@@ -71,6 +84,12 @@ def test_precondition_error_for_short_reason(cli_env):
 def test_precondition_error_for_missing_session(cli_env):
     rc = run(["capabilities", "list"], env=cli_env)
     assert rc == 6
+
+
+def test_validation_error_for_capabilities_domain_override(cli_env):
+    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]))
+    rc = run(["capabilities", "list", "--domain", "Trading"], env=cli_env)
+    assert rc == 2
 
 
 def test_validation_error_for_handoff_submit_missing_acceptance_criteria(cli_env):
@@ -121,6 +140,23 @@ def test_permission_denied_for_non_trading_strategist_handoff_submit(cli_env):
             "P1",
             "--trading-goals-ref",
             "trading-goal://risk/limit-hard-stop",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+    )
+    assert rc == 4
+
+
+def test_permission_denied_for_non_nexus_handoff_set_issue(cli_env):
+    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
+    rc = run(
+        [
+            "handoff",
+            "set-issue",
+            "HC-2026-0001",
+            "--issue-ref",
+            "issue://github/example/repo#1",
             "--output",
             "json",
         ],

@@ -4,12 +4,14 @@ Last Reviewed: 2026-04-27
 
 ## Mandatory Checks
 - Scan new/submitted handoffs requiring gate decision.
+- Scan submitted handoffs without `issue_ref` and create linkage before downstream routing.
 - Scan active handoffs for missed SLA deadlines (gate reaction and SW-triage start).
 - Scan blocked handoffs with unresolved owner or missing escalation payload.
 - Scan parent issues where all children are done and closure is now valid.
 
 ## Priority Order
 - Risk/incident blockers first.
+- Then submitted handoffs missing GitHub issue linkage.
 - Then SLA-breaching handoffs.
 - Then stale blocked work.
 - Then throughput optimization.

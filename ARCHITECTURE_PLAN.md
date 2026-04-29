@@ -1,6 +1,6 @@
 # OpenClaw - Runtime and Architecture Plan
-Version: 2.6
-Date: 2026-04-26
+Version: 2.7
+Date: 2026-04-28
 Status: Active
 
 ---
@@ -32,18 +32,23 @@ Fachliche Prozesse sind ausgelagert:
 
 ## 2. Runtime Topologie
 
-Container-Service:
+Container-Services:
 - `openclaw-gateway`
+- `nexusctl-server`
 
 Build-Modell:
 - lokales Image `openclaw-with-gh:latest`
 - Basisimage `ghcr.io/openclaw/openclaw:latest`
+- `nexusctl` ist via `pip install` ins Image gebacken (nicht via Workspace oder externe Mounts)
 
-Wichtige Volumes:
+Wichtige Volumes (openclaw-gateway):
 - `/opt/openclaw/state -> /home/node/.openclaw`
 - `/opt/openclaw/workspace -> /workspace`
 - `/opt/openclaw/data/clawmem -> /home/node/.openclaw/memory`
 - `/opt/openclaw/data/ssh -> /home/node/.ssh` (read-only)
+
+Wichtige Volumes (nexusctl-server):
+- `/opt/openclaw/state -> /home/node/.openclaw`
 
 ---
 
@@ -120,7 +125,7 @@ Pflichtdateien pro Agent unter `/home/node/.openclaw/agents/<agent-id>/agent/`:
 ## 7. Betriebsregeln
 
 - Persistenter Work-State bleibt in GitHub-Artefakten.
-- Schreibende Agentenoperationen auf GitHub-Artefakten ueber `nexusctl` sind optionales Phase-2-Zielbild.
+- Ticket-/Issue-Koordination fuer Handoffs liegt in der `nexus`-Agent-Lane; `nexusctl` speichert Handoff- und Linkage-State, erstellt aber keine Tickets automatisch.
 - Health-Check des Gateways muss aktiv sein.
 - Cron-/Session-Logs duerfen fuer Neustarts bereinigt werden, ohne Core-Governance zu veraendern.
 - Capability-Status darf nicht aus Memory allein abgeleitet werden.

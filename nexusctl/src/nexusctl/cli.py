@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Mapping, TextIO
 
 from nexusctl.api import ApiClient
@@ -25,14 +26,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     auth = subparsers.add_parser("auth")
     auth.add_argument("--agent-token")
-    auth.add_argument("--domain")
     auth.add_argument("--output", choices=["table", "json"], default="table")
 
     capabilities = subparsers.add_parser("capabilities")
     cap_subparsers = capabilities.add_subparsers(dest="cap_command", required=True)
 
     cap_list = cap_subparsers.add_parser("list")
-    cap_list.add_argument("--domain")
     cap_list.add_argument("--status", choices=["all", "planned", "available"], default="all")
     cap_list.add_argument("--output", choices=["table", "json"], default="table")
 
@@ -59,6 +58,18 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_submit.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], required=True)
     handoff_submit.add_argument("--trading-goals-ref", required=True, dest="trading_goals_ref")
     handoff_submit.add_argument("--output", choices=["table", "json"], default="table")
+
+    handoff_list = handoff_subparsers.add_parser("list")
+    handoff_list.add_argument("--status", choices=["submitted"], default="submitted")
+    handoff_list.add_argument("--limit", type=int, default=100)
+    handoff_list.add_argument("--output", choices=["table", "json"], default="table")
+
+    handoff_issue = handoff_subparsers.add_parser("set-issue")
+    handoff_issue.add_argument("handoff_id")
+    handoff_issue.add_argument("--issue-ref", required=True, dest="issue_ref")
+    handoff_issue.add_argument("--issue-number", type=int, default=None, dest="issue_number")
+    handoff_issue.add_argument("--issue-url", default=None, dest="issue_url")
+    handoff_issue.add_argument("--output", choices=["table", "json"], default="table")
 
     return parser
 
@@ -93,10 +104,10 @@ def run(
 
 
 def _run_auth(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, env: Mapping[str, str], out: TextIO) -> int:
-    token = args.agent_token or env.get("NEXUS_AGENT_TOKEN")
+    token = args.agent_token or env.get("NEXUS_AGENT_TOKEN") or _resolve_seed_token(env)
     if not token:
         raise NexusError("NX-VAL-002", "missing agent token (--agent-token or NEXUS_AGENT_TOKEN)")
-    auth_response = api.auth(agent_token=token, domain=args.domain)
+    auth_response = api.auth(agent_token=token)
     sessions.save_auth_response(auth_response)
     _emit_auth(out=out, output=args.output, payload=auth_response)
     return EXIT_SUCCESS
@@ -105,7 +116,7 @@ def _run_auth(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStor
 def _run_capabilities(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, out: TextIO) -> int:
     if args.cap_command == "list":
         session = sessions.load_active()
-        payload = api.list_capabilities(session=session, domain=args.domain, status=args.status)
+        payload = api.list_capabilities(session=session, status=args.status)
         _emit_capability_list(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
 
@@ -134,6 +145,12 @@ def _run_capabilities(args: argparse.Namespace, *, api: ApiClient, sessions: Ses
 
 
 def _run_handoff(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, out: TextIO) -> int:
+    if args.handoff_command == "list":
+        session = sessions.load_active()
+        payload = api.list_handoffs(session=session, status=args.status, limit=args.limit)
+        _emit_handoff_list(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+
     if args.handoff_command == "submit":
         session = sessions.load_active()
         if session.role != "trading-strategist":
@@ -158,6 +175,22 @@ def _run_handoff(args: argparse.Namespace, *, api: ApiClient, sessions: SessionS
             trading_goals_ref=trading_goals_ref,
         )
         _emit_handoff_submit(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+
+    if args.handoff_command == "set-issue":
+        session = sessions.load_active()
+        if session.role != "nexus":
+            raise NexusError("NX-PERM-001", "only nexus may set handoff issue linkage")
+        issue_ref = _require_text(args.issue_ref, field="issue-ref")
+        issue_url = args.issue_url.strip() if isinstance(args.issue_url, str) and args.issue_url else None
+        payload = api.set_handoff_issue(
+            session=session,
+            handoff_id=args.handoff_id,
+            issue_ref=issue_ref,
+            issue_number=args.issue_number,
+            issue_url=issue_url,
+        )
+        _emit_handoff_issue_set(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
 
     raise NexusError("NX-VAL-001", "unknown handoff command")
@@ -257,8 +290,47 @@ def _emit_handoff_submit(*, out: TextIO, output: str, payload: dict) -> None:
             ("risk_class", str(payload.get("risk_class", ""))),
             ("priority", str(payload.get("priority", ""))),
             ("trading_goals_ref", str(payload.get("trading_goals_ref", ""))),
+            ("issue_ref", str(payload.get("issue_ref", "none"))),
             ("agent_id", str(payload.get("agent_id", ""))),
             ("project_id", str(payload.get("project_id", ""))),
+            ("timestamp", str(payload.get("timestamp", ""))),
+        ],
+    )
+
+
+def _emit_handoff_list(*, out: TextIO, output: str, payload: dict) -> None:
+    handoffs = payload.get("handoffs", payload if isinstance(payload, list) else [])
+    if output == "json":
+        if isinstance(payload, dict):
+            write_json(out, payload)
+        else:
+            write_json(out, {"handoffs": handoffs})
+        return
+    rows = [
+        [
+            item.get("handoff_id", ""),
+            item.get("status", ""),
+            item.get("priority", ""),
+            item.get("risk_class", ""),
+            item.get("issue_ref", "none"),
+        ]
+        for item in handoffs
+    ]
+    write_table(out, ["handoff_id", "status", "priority", "risk_class", "issue_ref"], rows)
+
+
+def _emit_handoff_issue_set(*, out: TextIO, output: str, payload: dict) -> None:
+    if output == "json":
+        write_json(out, payload)
+        return
+    write_key_values(
+        out,
+        [
+            ("ok", str(payload.get("ok", True))),
+            ("handoff_id", str(payload.get("handoff_id", ""))),
+            ("issue_ref", str(payload.get("issue_ref", ""))),
+            ("github_issue_number", str(payload.get("github_issue_number", ""))),
+            ("github_issue_url", str(payload.get("github_issue_url", ""))),
             ("timestamp", str(payload.get("timestamp", ""))),
         ],
     )
@@ -269,3 +341,58 @@ def _require_text(value: str, *, field: str) -> str:
     if not text:
         raise NexusError("NX-VAL-001", f"--{field} must not be empty")
     return text
+
+
+def _resolve_seed_token(env: Mapping[str, str]) -> str | None:
+    token_file = Path(env.get("NEXUSCTL_SEED_TOKENS_FILE", "/home/node/.openclaw/nexusctl/seed_tokens.env")).expanduser()
+    tokens = _read_seed_tokens(token_file)
+    if not tokens:
+        return None
+
+    agent_id = _resolve_agent_id(env)
+    if not agent_id:
+        return None
+
+    candidates = [agent_id]
+    if agent_id.endswith("-01"):
+        candidates.append(agent_id[:-3])
+    else:
+        candidates.append(f"{agent_id}-01")
+    for candidate in candidates:
+        token = tokens.get(candidate)
+        if token:
+            return token
+    return None
+
+
+def _resolve_agent_id(env: Mapping[str, str]) -> str | None:
+    explicit = env.get("NEXUSCTL_AGENT_ID") or env.get("OPENCLAW_AGENT_ID")
+    if explicit:
+        return explicit.strip() or None
+
+    agent_dir = env.get("NEXUSCTL_AGENT_DIR")
+    if not agent_dir:
+        return None
+    path = Path(agent_dir).expanduser().resolve()
+    if path.name == "agent" and path.parent.name:
+        return path.parent.name
+    return path.name or None
+
+
+def _read_seed_tokens(path: Path) -> dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+
+    tokens: dict[str, str] = {}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            tokens[key] = value
+    return tokens

@@ -194,5 +194,6 @@ Merge in `main` ist nur erlaubt, wenn alle folgenden Punkte erfuellt sind:
 ## 9. Ticket-/PR-Automation ueber `nexusctl` (Phase 2 Zielbild)
 
 1. GitHub bleibt System of Record fuer Umsetzungsevidenz (Issue/PR/Review/CI).
-2. Im MVP ist nur Capability-Transparenz ueber `nexusctl` verbindlich.
-3. Eine vollstaendige Ticket-/PR-Steuerung ueber `nexusctl` ist optionales Phase-2-Zielbild.
+2. Die Handoff->Issue-Koordination liegt in der `nexus`-Agent-Lane.
+3. `nexusctl` bleibt fuer Capability-/Handoff-State und Linkage-Persistenz zustaendig, ohne automatische Issue-Erstellung.
+4. Eine vollstaendige Ticket-/PR-Steuerung als direkter `nexusctl`-Automatismus bleibt optionales Phase-2-Zielbild.

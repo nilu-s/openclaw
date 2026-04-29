@@ -12,6 +12,12 @@ from nexusctl.errors import NexusError
 from nexusctl.models import Session
 
 
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _is_loopback_hostname(hostname: str | None) -> bool:
     if not hostname:
         return False
@@ -46,20 +52,17 @@ class ApiClient:
         parsed = urlparse(base_url)
         if parsed.scheme not in {"http", "https"}:
             raise NexusError("NX-VAL-001", "NEXUSCTL_API_BASE_URL must start with http:// or https://")
-        if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname):
+        allow_insecure_remote = _is_truthy(env.get("NEXUSCTL_ALLOW_INSECURE_REMOTE"))
+        if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname) and not allow_insecure_remote:
             raise NexusError("NX-VAL-001", "insecure http base URL is only allowed for loopback hosts")
         return cls(base_url=base_url)
 
-    def auth(self, *, agent_token: str, domain: str | None) -> dict[str, Any]:
+    def auth(self, *, agent_token: str) -> dict[str, Any]:
         payload: dict[str, Any] = {"agent_token": agent_token}
-        if domain:
-            payload["domain"] = domain
         return self._request("POST", "/v1/nexus/auth", payload=payload, timeout=self._auth_timeout_seconds)
 
-    def list_capabilities(self, *, session: Session, domain: str | None, status: str) -> dict[str, Any]:
+    def list_capabilities(self, *, session: Session, status: str) -> dict[str, Any]:
         query: dict[str, str] = {"status": status, "project_id": session.project_id}
-        if domain:
-            query["domain"] = domain
         return self._request(
             "GET",
             "/v1/nexus/capabilities",
@@ -114,6 +117,40 @@ class ApiClient:
                 "priority": priority,
                 "trading_goals_ref": trading_goals_ref,
             },
+            headers=self._session_headers(session),
+            timeout=self._timeout_seconds,
+            retry_once=False,
+        )
+
+    def list_handoffs(self, *, session: Session, status: str = "submitted", limit: int = 100) -> dict[str, Any]:
+        query = {"status": status, "limit": str(limit)}
+        return self._request(
+            "GET",
+            "/v1/nexus/handoffs",
+            query=query,
+            headers=self._session_headers(session),
+            timeout=self._timeout_seconds,
+            retry_once=True,
+        )
+
+    def set_handoff_issue(
+        self,
+        *,
+        session: Session,
+        handoff_id: str,
+        issue_ref: str,
+        issue_number: int | None,
+        issue_url: str | None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"issue_ref": issue_ref}
+        if issue_number is not None:
+            payload["issue_number"] = issue_number
+        if issue_url is not None:
+            payload["issue_url"] = issue_url
+        return self._request(
+            "POST",
+            f"/v1/nexus/handoffs/{handoff_id}/issue",
+            payload=payload,
             headers=self._session_headers(session),
             timeout=self._timeout_seconds,
             retry_once=False,

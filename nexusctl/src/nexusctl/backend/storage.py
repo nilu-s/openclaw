@@ -154,6 +154,18 @@ def _cutover_agent_registry_to_v2(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
 
 
+def _migrate_handoff_issue_columns(conn: sqlite3.Connection) -> None:
+    columns = _table_columns(conn, "handoff_requests")
+    if "github_issue_ref" not in columns:
+        conn.execute("ALTER TABLE handoff_requests ADD COLUMN github_issue_ref TEXT NOT NULL DEFAULT 'none'")
+    if "github_issue_number" not in columns:
+        conn.execute("ALTER TABLE handoff_requests ADD COLUMN github_issue_number INTEGER")
+    if "github_issue_url" not in columns:
+        conn.execute("ALTER TABLE handoff_requests ADD COLUMN github_issue_url TEXT")
+    if "github_issue_updated_at" not in columns:
+        conn.execute("ALTER TABLE handoff_requests ADD COLUMN github_issue_updated_at TEXT")
+
+
 def initialize_database(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -252,12 +264,17 @@ def initialize_database(db_path: Path) -> None:
                 submitted_by_agent_id TEXT NOT NULL,
                 project_id TEXT NOT NULL,
                 domain TEXT NOT NULL,
+                github_issue_ref TEXT NOT NULL DEFAULT 'none',
+                github_issue_number INTEGER,
+                github_issue_url TEXT,
+                github_issue_updated_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
             """
         )
         _cutover_agent_registry_to_v2(conn)
+        _migrate_handoff_issue_columns(conn)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
         conn.commit()
     finally:
@@ -356,7 +373,7 @@ class Storage:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def authenticate(self, *, agent_token: str, domain: str | None) -> dict[str, Any]:
+    def authenticate(self, *, agent_token: str) -> dict[str, Any]:
         with self._lock:
             conn = self._connect()
             try:
@@ -383,9 +400,6 @@ class Storage:
                 )
                 if row is None:
                     raise NexusError("NX-PERM-001", "invalid or inactive token")
-                if domain and domain != row["domain"]:
-                    raise NexusError("NX-PERM-001", "token is not valid for requested domain")
-
                 auth_id = _random_id("AUTH-2026-")
                 session_id = _random_id("S-2026-")
                 timestamp = _utc_now()
@@ -468,10 +482,10 @@ class Storage:
         finally:
             conn.close()
 
-    def list_capabilities(self, *, status_filter: str, domain: str | None) -> dict[str, Any]:
+    def list_capabilities(self, *, status_filter: str) -> dict[str, Any]:
         conn = self._connect()
         try:
-            return {"capabilities": self._query_capabilities(conn, status_filter=status_filter, domain=domain)}
+            return {"capabilities": self._query_capabilities(conn, status_filter=status_filter, domain=None)}
         finally:
             conn.close()
 
@@ -639,13 +653,20 @@ class Storage:
             try:
                 timestamp = _iso(_utc_now())
                 row = conn.execute(
-                    "SELECT handoff_id, created_at FROM handoff_requests WHERE dedupe_key = ?",
+                    """
+                    SELECT handoff_id, created_at, github_issue_ref, github_issue_number, github_issue_url
+                    FROM handoff_requests
+                    WHERE dedupe_key = ?
+                    """,
                     (dedupe_key,),
                 ).fetchone()
                 updated_existing = row is not None
                 if row is None:
                     handoff_id = _random_id("HC-2026-")
                     created_at = timestamp
+                    github_issue_ref = "none"
+                    github_issue_number: int | None = None
+                    github_issue_url: str | None = None
                     conn.execute(
                         """
                         INSERT INTO handoff_requests(
@@ -663,10 +684,14 @@ class Storage:
                             submitted_by_agent_id,
                             project_id,
                             domain,
+                            github_issue_ref,
+                            github_issue_number,
+                            github_issue_url,
+                            github_issue_updated_at,
                             created_at,
                             updated_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             handoff_id,
@@ -682,6 +707,10 @@ class Storage:
                             actor.agent_id,
                             actor.project_id,
                             actor.domain,
+                            github_issue_ref,
+                            github_issue_number,
+                            github_issue_url,
+                            None,
                             created_at,
                             timestamp,
                         ),
@@ -689,6 +718,9 @@ class Storage:
                 else:
                     handoff_id = row["handoff_id"]
                     created_at = row["created_at"]
+                    github_issue_ref = row["github_issue_ref"] or "none"
+                    github_issue_number = row["github_issue_number"]
+                    github_issue_url = row["github_issue_url"]
                     conn.execute(
                         """
                         UPDATE handoff_requests
@@ -740,6 +772,124 @@ class Storage:
                     "timestamp": timestamp,
                     "created_at": created_at,
                     "updated_existing": updated_existing,
+                    "issue_ref": github_issue_ref,
+                    "github_issue_number": github_issue_number,
+                    "github_issue_url": github_issue_url,
+                    "github_issue_updated_at": None,
+                }
+            finally:
+                conn.close()
+
+    def list_handoffs(self, *, status_filter: str = "submitted", limit: int = 100) -> dict[str, Any]:
+        conn = self._connect()
+        try:
+            if status_filter != "submitted":
+                raise NexusError("NX-VAL-001", "invalid handoff status filter")
+            if limit <= 0 or limit > 1000:
+                raise NexusError("NX-VAL-001", "invalid handoff limit")
+            rows = conn.execute(
+                """
+                SELECT
+                    handoff_id,
+                    status,
+                    objective,
+                    missing_capability,
+                    business_impact,
+                    expected_behavior,
+                    acceptance_criteria_json,
+                    risk_class,
+                    priority,
+                    trading_goals_ref,
+                    submitted_by_agent_id,
+                    project_id,
+                    domain,
+                    github_issue_ref,
+                    github_issue_number,
+                    github_issue_url,
+                    github_issue_updated_at,
+                    created_at,
+                    updated_at
+                FROM handoff_requests
+                WHERE status = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (status_filter, limit),
+            ).fetchall()
+            items: list[dict[str, Any]] = []
+            for row in rows:
+                items.append(
+                    {
+                        "handoff_id": row["handoff_id"],
+                        "status": row["status"],
+                        "objective": row["objective"],
+                        "missing_capability": row["missing_capability"],
+                        "business_impact": row["business_impact"],
+                        "expected_behavior": row["expected_behavior"],
+                        "acceptance_criteria": json.loads(row["acceptance_criteria_json"]),
+                        "risk_class": row["risk_class"],
+                        "priority": row["priority"],
+                        "trading_goals_ref": row["trading_goals_ref"],
+                        "submitted_by_agent_id": row["submitted_by_agent_id"],
+                        "project_id": row["project_id"],
+                        "domain": row["domain"],
+                        "issue_ref": row["github_issue_ref"] or "none",
+                        "github_issue_number": row["github_issue_number"],
+                        "github_issue_url": row["github_issue_url"],
+                        "github_issue_updated_at": row["github_issue_updated_at"],
+                        "created_at": row["created_at"],
+                        "updated_at": row["updated_at"],
+                    }
+                )
+            return {"handoffs": items}
+        finally:
+            conn.close()
+
+    def set_handoff_issue(
+        self,
+        *,
+        actor: SessionContext,
+        handoff_id: str,
+        issue_ref: str,
+        issue_number: int | None,
+        issue_url: str | None,
+    ) -> dict[str, Any]:
+        if actor.role != "nexus":
+            raise NexusError("NX-PERM-001", "only nexus may set handoff issue linkage")
+        issue_ref = _required_text(issue_ref, field="issue_ref")
+        if issue_number is not None and issue_number <= 0:
+            raise NexusError("NX-VAL-001", "issue_number must be positive")
+        if issue_url is not None and not issue_url.strip():
+            raise NexusError("NX-VAL-001", "issue_url must not be empty")
+        timestamp = _iso(_utc_now())
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT handoff_id FROM handoff_requests WHERE handoff_id = ?",
+                    (handoff_id,),
+                ).fetchone()
+                if row is None:
+                    raise NexusError("NX-NOTFOUND-001", "handoff not found")
+                conn.execute(
+                    """
+                    UPDATE handoff_requests
+                    SET github_issue_ref = ?, github_issue_number = ?, github_issue_url = ?, github_issue_updated_at = ?, updated_at = ?
+                    WHERE handoff_id = ?
+                    """,
+                    (issue_ref, issue_number, issue_url, timestamp, timestamp, handoff_id),
+                )
+                conn.commit()
+                return {
+                    "ok": True,
+                    "handoff_id": handoff_id,
+                    "issue_ref": issue_ref,
+                    "github_issue_number": issue_number,
+                    "github_issue_url": issue_url,
+                    "github_issue_updated_at": timestamp,
+                    "agent_id": actor.agent_id,
+                    "project_id": actor.project_id,
+                    "timestamp": timestamp,
                 }
             finally:
                 conn.close()

@@ -28,9 +28,11 @@ class SessionStore:
     def load_active(self) -> Session:
         candidates = self._candidate_session_dirs()
         matches = [p for p in candidates if (p / "current.json").is_file()]
+        selected_agent_id = self._env.get("NEXUSCTL_AGENT_ID") or self._env.get("OPENCLAW_AGENT_ID")
+        explicit_agent_dir = self._env.get("NEXUSCTL_AGENT_DIR")
         if not matches:
             raise NexusError("NX-PRECONDITION-001", "no active session found, run `nexusctl auth` first")
-        if len(matches) > 1:
+        if len(matches) > 1 and not (selected_agent_id or explicit_agent_dir):
             raise NexusError(
                 "NX-PRECONDITION-001",
                 "multiple agent sessions found; set NEXUSCTL_AGENT_ID or NEXUSCTL_AGENT_DIR",
@@ -49,7 +51,9 @@ class SessionStore:
         if explicit_agent_dir:
             return Path(explicit_agent_dir).expanduser() / ".nexusctl" / "sessions"
         base = Path(self._env.get("NEXUSCTL_SESSION_BASE", str(Path.home() / ".openclaw" / "agents"))).expanduser()
-        return base / agent_id / "agent" / ".nexusctl" / "sessions"
+        selected_agent_id = self._env.get("NEXUSCTL_AGENT_ID") or self._env.get("OPENCLAW_AGENT_ID")
+        target_agent_id = selected_agent_id or agent_id
+        return base / target_agent_id / "agent" / ".nexusctl" / "sessions"
 
     def _candidate_session_dirs(self) -> list[Path]:
         explicit_agent_dir = self._env.get("NEXUSCTL_AGENT_DIR")
@@ -59,7 +63,12 @@ class SessionStore:
         base = Path(self._env.get("NEXUSCTL_SESSION_BASE", str(Path.home() / ".openclaw" / "agents"))).expanduser()
         selected_agent_id = self._env.get("NEXUSCTL_AGENT_ID") or self._env.get("OPENCLAW_AGENT_ID")
         if selected_agent_id:
-            return [base / selected_agent_id / "agent" / ".nexusctl" / "sessions"]
+            candidates = [base / selected_agent_id / "agent" / ".nexusctl" / "sessions"]
+            if selected_agent_id.endswith("-01"):
+                candidates.append(base / selected_agent_id[:-3] / "agent" / ".nexusctl" / "sessions")
+            else:
+                candidates.append(base / f"{selected_agent_id}-01" / "agent" / ".nexusctl" / "sessions")
+            return candidates
 
         if not base.exists():
             return []

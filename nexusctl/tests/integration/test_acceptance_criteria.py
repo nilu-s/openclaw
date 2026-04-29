@@ -180,3 +180,65 @@ def test_ac_011_handoff_submit_rejects_non_trading_strategist(cli_env):
         env=cli_env,
     )
     assert rc == 4
+
+
+def test_ac_012_nexus_can_list_handoffs_and_set_issue_link(cli_env):
+    assert run(["auth", "--agent-token", "tok_trading", "--output", "json"], env=cli_env) == 0
+    assert run(
+        [
+            "handoff",
+            "submit",
+            "--objective",
+            "Need CAP-PT-001 baseline simulator.",
+            "--missing-capability",
+            "CAP-PT-001 paper execution simulator.",
+            "--business-impact",
+            "Paper baseline is blocked.",
+            "--expected-behavior",
+            "Order lifecycle simulation is deterministic and logged.",
+            "--acceptance-criteria",
+            "Given paper order submit, lifecycle state is persisted.",
+            "--risk-class",
+            "high",
+            "--priority",
+            "P1",
+            "--trading-goals-ref",
+            "trading-goal://g-001/paper-baseline",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+    ) == 0
+
+    assert run(["auth", "--agent-token", "tok_nexus", "--output", "json"], env=cli_env) == 0
+    out = io.StringIO()
+    err = io.StringIO()
+    rc = run(["handoff", "list", "--status", "submitted", "--limit", "10", "--output", "json"], env=cli_env, out=out, err=err)
+    assert rc == 0, err.getvalue()
+    payload = json.loads(out.getvalue())
+    assert payload["handoffs"]
+    handoff_id = payload["handoffs"][0]["handoff_id"]
+
+    out2 = io.StringIO()
+    err2 = io.StringIO()
+    rc2 = run(
+        [
+            "handoff",
+            "set-issue",
+            handoff_id,
+            "--issue-ref",
+            "issue://github/mawly-engineer/trading-system#99",
+            "--issue-number",
+            "99",
+            "--issue-url",
+            "https://github.com/mawly-engineer/trading-system/issues/99",
+            "--output",
+            "json",
+        ],
+        env=cli_env,
+        out=out2,
+        err=err2,
+    )
+    assert rc2 == 0, err2.getvalue()
+    payload2 = json.loads(out2.getvalue())
+    assert payload2["issue_ref"] == "issue://github/mawly-engineer/trading-system#99"

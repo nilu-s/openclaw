@@ -9,6 +9,8 @@ Implementierte Backend-Erwartung fuer die Python-CLI.
 3. `GET /v1/nexus/capabilities/{capability_id}`
 4. `POST /v1/nexus/capabilities/{capability_id}/status`
 5. `POST /v1/nexus/handoffs`
+6. `GET /v1/nexus/handoffs`
+7. `POST /v1/nexus/handoffs/{handoff_id}/issue`
 
 ## Header
 
@@ -21,8 +23,7 @@ Implementierte Backend-Erwartung fuer die Python-CLI.
 
 ```json
 {
-  "agent_token": "tok_xxx",
-  "domain": "Trading"
+  "agent_token": "tok_xxx"
 }
 ```
 
@@ -49,6 +50,16 @@ Implementierte Backend-Erwartung fuer die Python-CLI.
   "risk_class": "high",
   "priority": "P1",
   "trading_goals_ref": "trading-goal://risk/limit-hard-stop"
+}
+```
+
+### Handoff Issue Link
+
+```json
+{
+  "issue_ref": "issue://github/owner/repo#42",
+  "issue_number": 42,
+  "issue_url": "https://github.com/owner/repo/issues/42"
 }
 ```
 

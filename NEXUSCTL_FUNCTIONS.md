@@ -49,13 +49,19 @@ Token-Aufloesung:
 ## 4. MVP Command Surface
 
 ```text
-nexusctl auth --agent-token <token> [--domain <id>] [--output table|json]
+nexusctl auth --agent-token <token> [--output table|json]
 
-nexusctl capabilities list [--domain <id>] [--status all|planned|available] [--output table|json]
+nexusctl capabilities list [--status all|planned|available] [--output table|json]
 
 nexusctl capabilities show <capability-id> [--output table|json]
 
 nexusctl capabilities set-status <capability-id> --to planned|available --reason <text> [--output table|json]
+
+nexusctl handoff submit --objective <text> --missing-capability <text> --business-impact <text> --expected-behavior <text> --acceptance-criteria <text> --risk-class <low|medium|high|critical> --priority <P0|P1|P2|P3> --trading-goals-ref <ref> [--output table|json]
+
+nexusctl handoff list [--status submitted] [--limit 100] [--output table|json]
+
+nexusctl handoff set-issue <handoff-id> --issue-ref <ref> [--issue-number <n>] [--issue-url <url>] [--output table|json]
 ```
 
 ### 4.1 Kommandozwecke
@@ -80,6 +86,15 @@ nexusctl capabilities set-status <capability-id> --to planned|available --reason
   - im MVP ist nur `planned -> available` als Freischaltung vorgesehen.
   - nur fuer `sw-techlead` erlaubt.
   - prueft vor Freischaltung die Gate-Regeln (siehe Abschnitt 8.1).
+
+- `handoff list`
+  - liefert offene Handoffs fuer Orchestrierungsrollen im Session-Kontext.
+  - default-filter ist `submitted`.
+
+- `handoff set-issue`
+  - verlinkt ein vorhandenes Handoff mit GitHub-Issue-Referenz.
+  - nur fuer `nexus` erlaubt.
+  - erstellt selbst kein Ticket, sondern persistiert koordinierte Linkage.
 
 ---
 
@@ -156,6 +171,9 @@ nexusctl capabilities set-status <capability-id> --to planned|available --reason
 | `capabilities list` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
 | `capabilities show` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
 | `capabilities set-status` | Deny | Allow (`sw-techlead` only) | Deny | Deny |
+| `handoff submit` | Allow (`trading-strategist` only) | Deny | Deny | Deny |
+| `handoff list` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
+| `handoff set-issue` | Deny | Deny | Allow (`nexus` only) | Deny |
 
 ---
 

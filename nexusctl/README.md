@@ -9,6 +9,8 @@ CLI + Backend fuer Capability-Preflight und Capability-Status im OpenClaw-MVP.
 - `capabilities show`
 - `capabilities set-status` (lokal bereits auf `sw-techlead` + `--to available` begrenzt)
 - `handoff submit` (nur `trading-strategist`, persistiert Handoff im Backend)
+- `handoff list` (Queue-Read fuer orchestrierende Rollen wie `nexus`)
+- `handoff set-issue` (nur `nexus`, schreibt Issue-Linkage zurueck in Nexus)
 - `nexusctl-server` (echter HTTP-Service mit SQLite-Persistenz)
 - Session-Store mit TTL-Check
 - Exit-Code- und Fehlercode-Mapping gemaess `NEXUSCTL_FUNCTIONS.md`
@@ -37,6 +39,8 @@ nexusctl capabilities list --status all --output table
 nexusctl capabilities show F-001 --output json
 nexusctl capabilities set-status F-002 --to available --reason "All requirements verified and evidence linked." --output json
 nexusctl handoff submit --objective "Reduce reaction latency for risk-limit breaches." --missing-capability "Automatic hard-stop trigger when risk threshold is exceeded." --business-impact "Prevents prolonged exposure during volatility spikes." --expected-behavior "System halts new entries within breach window." --acceptance-criteria "Given threshold breach, new entries are blocked within 500ms." --risk-class high --priority P1 --trading-goals-ref "trading-goal://risk/limit-hard-stop" --output json
+nexusctl handoff list --status submitted --limit 20 --output json
+nexusctl handoff set-issue HC-2026-0001 --issue-ref "issue://github/owner/repo#42" --issue-number 42 --issue-url "https://github.com/owner/repo/issues/42" --output json
 ```
 
 ## Konfiguration (Env)
@@ -46,6 +50,8 @@ nexusctl handoff submit --objective "Reduce reaction latency for risk-limit brea
 - `NEXUSCTL_AGENT_DIR` (empfohlen; Agent-Kontextpfad)
 - `NEXUSCTL_AGENT_ID` oder `OPENCLAW_AGENT_ID` (nur relevant ohne `NEXUSCTL_AGENT_DIR`)
 - `NEXUSCTL_SESSION_BASE` (default: `~/.openclaw/agents`, nur ohne `NEXUSCTL_AGENT_DIR`)
+
+Hinweis: Domain-Overrides sind absichtlich gesperrt (`auth --domain`, `capabilities list --domain`).
 
 ## Session-Speicher
 

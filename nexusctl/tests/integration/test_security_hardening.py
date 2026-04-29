@@ -40,7 +40,7 @@ def test_seed_defaults_do_not_accept_demo_tokens(tmp_path):
     seed_mvp_data(db_path)
     storage = Storage(db_path)
     try:
-        storage.authenticate(agent_token="tok_trading", domain=None)
+        storage.authenticate(agent_token="tok_trading")
     except Exception:
         return
     raise AssertionError("expected demo token to be rejected in default seed mode")
@@ -85,7 +85,7 @@ def test_initialize_database_migrates_legacy_agent_registry_schema(tmp_path):
     assert {"agent_token_hash", "agent_token_salt"}.issubset(columns)
 
     storage = Storage(db_path)
-    auth = storage.authenticate(agent_token="tok_legacy", domain=None)
+    auth = storage.authenticate(agent_token="tok_legacy")
     assert auth["agent_id"] == "legacy-agent"
     assert auth["project_id"] == "legacy-project"
 
@@ -97,9 +97,17 @@ def test_cli_rejects_insecure_remote_http_base_url(cli_env):
     assert rc == 2
 
 
-def test_auth_rejects_domain_override_mismatch(cli_env):
+def test_cli_allows_insecure_remote_http_base_url_when_explicitly_enabled(cli_env):
+    env = dict(cli_env)
+    env["NEXUSCTL_API_BASE_URL"] = "http://192.0.2.20:8080"
+    env["NEXUSCTL_ALLOW_INSECURE_REMOTE"] = "true"
+    rc = run(["auth", "--agent-token", "tok_trading"], env=env)
+    assert rc == 10
+
+
+def test_auth_rejects_domain_override_parameter(cli_env):
     rc = run(["auth", "--agent-token", "tok_trading", "--domain", "Software", "--output", "json"], env=cli_env)
-    assert rc == 4
+    assert rc == 2
 
 
 def test_seeded_registry_does_not_store_plaintext_tokens(backend_server):
@@ -189,3 +197,23 @@ def test_agent_header_must_match_session(backend_server):
         payload = json.loads(exc.read().decode("utf-8"))
         assert exc.code == 403
         assert payload["error_code"] == "NX-PERM-001"
+
+
+def test_capabilities_endpoint_rejects_domain_query_override(backend_server):
+    auth_payload = _auth(backend_server.base_url, "tok_trading")
+    request = Request(
+        url=f"{backend_server.base_url}/v1/nexus/capabilities?status=all&domain=Trading",
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "X-Nexus-Session-Id": auth_payload["session_id"],
+            "X-Nexus-Agent-Id": auth_payload["agent_id"],
+        },
+    )
+    try:
+        with urlopen(request, timeout=5):
+            raise AssertionError("expected domain query override to be rejected")
+    except HTTPError as exc:
+        payload = json.loads(exc.read().decode("utf-8"))
+        assert exc.code == 400
+        assert payload["error_code"] == "NX-VAL-001"

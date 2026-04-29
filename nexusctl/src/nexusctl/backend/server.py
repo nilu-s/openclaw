@@ -102,7 +102,9 @@ def _make_handler(storage: Storage):
                     token = payload.get("agent_token")
                     if not token:
                         raise NexusError("NX-VAL-002", "missing agent_token")
-                    result = storage.authenticate(agent_token=token, domain=payload.get("domain"))
+                    if "domain" in payload:
+                        raise NexusError("NX-VAL-001", "domain override is not allowed")
+                    result = storage.authenticate(agent_token=token)
                     self._send_json(200, result)
                     return
 
@@ -157,6 +159,28 @@ def _make_handler(storage: Storage):
                     self._send_json(200, result)
                     return
 
+                if path.startswith("/v1/nexus/handoffs/") and path.endswith("/issue"):
+                    session = self._require_session()
+                    handoff_id = path.split("/")[4]
+                    issue_ref = payload.get("issue_ref")
+                    issue_number = payload.get("issue_number")
+                    issue_url = payload.get("issue_url")
+                    if not isinstance(issue_ref, str):
+                        raise NexusError("NX-VAL-001", "invalid handoff issue payload")
+                    if issue_number is not None and not isinstance(issue_number, int):
+                        raise NexusError("NX-VAL-001", "invalid handoff issue payload")
+                    if issue_url is not None and not isinstance(issue_url, str):
+                        raise NexusError("NX-VAL-001", "invalid handoff issue payload")
+                    result = storage.set_handoff_issue(
+                        actor=session,
+                        handoff_id=handoff_id,
+                        issue_ref=issue_ref,
+                        issue_number=issue_number,
+                        issue_url=issue_url,
+                    )
+                    self._send_json(200, result)
+                    return
+
                 raise NexusError("NX-NOTFOUND-001", "route not found")
             except NexusError as exc:
                 self._send_error_json(exc)
@@ -167,14 +191,19 @@ def _make_handler(storage: Storage):
             try:
                 parsed = urlparse(self.path)
                 path = parsed.path
+                if path == "/healthz":
+                    self._send_json(200, {"ok": True, "service": "nexusctl-server"})
+                    return
+
                 if path == "/v1/nexus/capabilities":
                     self._require_session()
                     query = parse_qs(parsed.query)
                     status = (query.get("status") or ["all"])[0]
-                    domain = (query.get("domain") or [None])[0]
+                    if "domain" in query:
+                        raise NexusError("NX-VAL-001", "domain filter is not allowed")
                     if status not in {"all", "planned", "available"}:
                         raise NexusError("NX-VAL-001", "invalid status filter")
-                    result = storage.list_capabilities(status_filter=status, domain=domain)
+                    result = storage.list_capabilities(status_filter=status)
                     self._send_json(200, result)
                     return
 
@@ -182,6 +211,19 @@ def _make_handler(storage: Storage):
                     self._require_session()
                     capability_id = path.split("/")[4]
                     result = storage.show_capability(capability_id)
+                    self._send_json(200, result)
+                    return
+
+                if path == "/v1/nexus/handoffs":
+                    self._require_session()
+                    query = parse_qs(parsed.query)
+                    status = (query.get("status") or ["submitted"])[0]
+                    limit_raw = (query.get("limit") or ["100"])[0]
+                    try:
+                        limit = int(limit_raw)
+                    except ValueError:
+                        raise NexusError("NX-VAL-001", "invalid handoff limit")
+                    result = storage.list_handoffs(status_filter=status, limit=limit)
                     self._send_json(200, result)
                     return
 
