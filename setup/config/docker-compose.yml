@@ -1,0 +1,172 @@
+services:
+  openclaw-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nexus-openclaw:latest
+    container_name: ${OPENCLAW_CONTAINER_NAME:-openclaw-gateway}
+    restart: unless-stopped
+    init: true
+
+    user: "1000:1000"
+
+    env_file:
+      - .env
+
+    environment:
+      HOME: /home/node
+      CODEX_HOME: /home/node/.openclaw/acpx/codex-home
+      NODE_ENV: production
+      TERM: xterm-256color
+      XDG_CONFIG_HOME: /home/node/.openclaw
+
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+
+      OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
+      OPENCLAW_GATEWAY_BIND: ${OPENCLAW_GATEWAY_BIND:-lan}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:-http://127.0.0.1:18789}
+
+      OPENCLAW_CRON_PROVIDER_PLUGIN_IDS: ${OPENCLAW_CRON_PROVIDER_PLUGIN_IDS:-ollama}
+      OPENCLAW_CRON_SKIP_PROVIDER_CATALOG_AUGMENT: ${OPENCLAW_CRON_SKIP_PROVIDER_CATALOG_AUGMENT:-1}
+
+      OLLAMA_API_KEY: ${OPENCLAW_OLLAMA_API_KEY:-ollama-local}
+      OLLAMA_BASE_URL: ${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+      OPENCLAW_REMOTE_SSH_TARGET: ${OPENCLAW_REMOTE_SSH_TARGET:-}
+      OPENCLAW_REMOTE_SSH_WORKSPACE_ROOT: ${OPENCLAW_REMOTE_SSH_WORKSPACE_ROOT:-/opt/openclaw/workspace}
+      OPENCLAW_REMOTE_SSH_IDENTITY_FILE: ${OPENCLAW_REMOTE_SSH_IDENTITY_FILE:-/home/node/.ssh/id_ed25519}
+      OPENCLAW_REMOTE_SSH_KNOWN_HOSTS_FILE: ${OPENCLAW_REMOTE_SSH_KNOWN_HOSTS_FILE:-/home/node/.ssh/known_hosts}
+
+      GH_TOKEN: ${GH_TOKEN:-}
+      GITHUB_TOKEN: ${GH_TOKEN:-}
+
+      NEXUSCTL_API_BASE_URL: ${NEXUSCTL_API_BASE_URL:-http://nexusctl-server:8080}
+      NEXUSCTL_ALLOW_INSECURE_REMOTE: ${NEXUSCTL_ALLOW_INSECURE_REMOTE:-true}
+
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        if [ -f /opt/openclaw-hotfix/cron-gateway-hotfix.js ]; then
+          node /opt/openclaw-hotfix/cron-gateway-hotfix.js
+        fi
+        exec docker-entrypoint.sh "$@"
+      - --
+
+    command:
+      - openclaw
+      - gateway
+      - --allow-unconfigured
+
+    ports:
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+
+    volumes:
+      - /opt/openclaw/state:/home/node/.openclaw
+      - /opt/openclaw/workspace:/workspace
+      - /opt/openclaw/data/clawmem:/home/node/.openclaw/memory
+      - /opt/openclaw/data/ssh:/home/node/.ssh:ro
+      - /opt/openclaw/scripts/cron-gateway-hotfix.js:/opt/openclaw-hotfix/cron-gateway-hotfix.js:ro
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    working_dir: /workspace
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:18789/healthz >/dev/null || exit 1" ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+
+  nexusctl-server:
+    image: nexus-openclaw:latest
+    container_name: nexusctl-server
+    user: "1000:1000"
+    restart: unless-stopped
+    init: true
+
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+
+    environment:
+      HOME: /home/node
+      NODE_ENV: production
+
+    command:
+      - nexusctl-server
+      - --db-path
+      - /home/node/.openclaw/nexusctl/nexusctl.sqlite3
+      - --seed
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --allow-insecure-remote
+
+    volumes:
+      - /opt/openclaw/state:/home/node/.openclaw
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  openclaw-cli:
+    image: nexus-openclaw:latest
+    profiles:
+      - cli
+
+    user: "1000:1000"
+
+    env_file:
+      - .env
+
+    environment:
+      HOME: /home/node
+      CODEX_HOME: /home/node/.openclaw/acpx/codex-home
+      NODE_ENV: production
+      TERM: xterm-256color
+      XDG_CONFIG_HOME: /home/node/.openclaw
+
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:-http://127.0.0.1:18789}
+
+      OLLAMA_API_KEY: ${OPENCLAW_OLLAMA_API_KEY:-ollama-local}
+      OLLAMA_BASE_URL: ${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+      GH_TOKEN: ${GH_TOKEN:-}
+      GITHUB_TOKEN: ${GH_TOKEN:-}
+
+    network_mode: "service:openclaw-gateway"
+
+    volumes:
+      - /opt/openclaw/state:/home/node/.openclaw
+      - /opt/openclaw/workspace:/workspace
+      - /opt/openclaw/data/clawmem:/home/node/.openclaw/memory
+      - /opt/openclaw/data/ssh:/home/node/.ssh:ro
+
+    working_dir: /workspace
+
+    entrypoint:
+      - docker-entrypoint.sh
+
+    command:
+      - openclaw
+      - --help
+
+    security_opt:
+      - no-new-privileges:true

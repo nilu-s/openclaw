@@ -1,0 +1,15 @@
+{
+  "context": "nexusctl context --output json",
+  "request_list": "nexusctl request list --status all --output json",
+  "request_show": "nexusctl request show <request_id> --output json",
+  "request_create": "nexusctl request create --objective TEXT --missing-capability TEXT --business-impact TEXT --expected-behavior TEXT --acceptance-criteria TEXT --risk-class low|medium|high|critical --priority P0|P1|P2|P3 --goal-ref ID --output json",
+  "request_transition": "nexusctl request transition <request_id> --to STATUS --reason TEXT --output json",
+  "work_show": "nexusctl work show <request_id> --output json",
+  "work_plan": "nexusctl work plan <request_id> --repo REPO_ID --branch NAME --assign AGENT_ID --sanitized-summary TEXT --output json",
+  "work_context": "nexusctl work set-implementation-context <request_id> --context-file PATH --output json",
+  "work_evidence": "nexusctl work submit-evidence <request_id> --kind KIND --summary TEXT --ref REF --output json",
+  "github_issue_create": "nexusctl github issue create <request_id> --dry-run --output json",
+  "github_pr_link": "nexusctl github pr link <request_id> --url URL --output json",
+  "github_sync": "nexusctl github sync <request_id> --output json",
+  "review_submit": "nexusctl reviews submit <request_id> --verdict approved|changes-requested|rejected --summary TEXT --output json"
+}

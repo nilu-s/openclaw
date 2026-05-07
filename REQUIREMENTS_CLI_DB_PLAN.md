@@ -1,114 +1,62 @@
 # OpenClaw - Requirements CLI/DB Plan
-Version: 2.3
-Date: 2026-04-26
-Status: Draft (vereinfacht)
+Version: 3.0
+Date: 2026-04-29
+Status: Verbindlich
 
 ---
 
 ## 1. Zielbild
 
-DB bleibt Source of Truth fuer Requirements.
-`nexusctl` nutzt im MVP einen klaren Einstieg:
-- `auth` authentifiziert Agent+Projekt und liefert sofort die komplette Feature-Liste.
+`nexusctl` liefert einen schlanken, generischen Agenten-Workflow:
 
-Danach kann ein Agent mit `capabilities show` einzelne Features detailliert auslesen.
-Bei Bedarf kann der Agent den Stand ueber `capabilities list` erneut abrufen.
+1. `context` fuer sofortige Lageeinschaetzung
+2. `request create` fuer One-Call-Bedarfsmeldung
+3. `request list/show` fuer Nachverfolgung
+
+Mutationen im Lifecycle/Issue-Linkage bleiben exklusiv bei `nexus`.
 
 ---
 
-## 2. MVP Scope
+## 2. Scope
 
 Enthalten:
-- `auth`
-- `capabilities list`
-- `capabilities show`
-- `capabilities set-status` (nur `sw-techlead`, nur `planned -> available`)
-- statische Agent-Projekt-Token-Aufloesung (`agent_token -> agent_id, role, project_id`)
+- Token-gebundene Identitaetsaufloesung (`agent_id`, `role`, `domain`, `project_id`)
+- `context`
+- `request create/list/show`
+- `request transition` (`nexus` only)
+- `request set-issue` (`nexus` only, nur in `accepted`)
+- Kompatibilitaet fuer `handoff *` und bestehende Capability-Commands
 
-Nicht enthalten:
-- `whoami`
-- `capabilities acknowledge`
-- Ticket/PR-Steuerung
-- Handoff-Automation
-- Snapshot-Export
+Nicht im Scope:
+- automatische GitHub-Issue-Erzeugung im Backend
+- freie Domain-/Agent-Overrides durch CLI-Parameter
 
 ---
 
-## 3. Verbindliche Nutzung
+## 3. Datenmodell (verbindlich)
 
-Capability-Preflight vor Strategie-, Planungs- oder Handoff-Arbeit ist verpflichtend.
-Die normative CLI-Regel (`auth`, Session-Nutzung, Re-Checks) liegt ausschliesslich in [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
+- `handoff_requests` (Request-Primarobjekt)
+  - enthaelt Pflichtfelder des Trading->Software-Contracts
+  - enthaelt Lifecycle-Status
+  - enthaelt Issue-Linkage (`github_issue_ref`, `github_issue_number`, `github_issue_url`)
+  - enthaelt letzte Transition-Metadaten (`last_reason`, `last_actor_agent_id`, `last_transition_at`)
 
----
+- `handoff_status_events`
+  - append-only Audit fuer Statuswechsel
+  - Felder: `from_status`, `to_status`, `reason`, `actor_agent_id`, `actor_role`, `project_id`, `domain`, `timestamp`
 
-## 4. Datenmodell (MVP-minimal)
-
-- `capabilities`
-  - `capability_id` (`F-...`)
-  - `domain`
-  - `title`
-  - `status` (`available|planned`)
-
-- `capability_details`
-  - `capability_id`
-  - `subfunction_ids` (`SF-...`)
-  - `requirement_ids` (`FR-...`)
-  - `state_summary`
-
-- `capability_status_events`
-  - `event_id`
-  - `capability_id`
-  - `old_status`
-  - `new_status`
-  - `reason`
-  - `agent_id`
-  - `project_id`
-  - `timestamp`
-
-- `auth_log`
-  - `auth_id`
-  - `session_id`
-  - `agent_id`
-  - `role`
-  - `project_id`
-  - `domain`
-  - `timestamp`
-
-- `agent_sessions`
-  - `session_id`
-  - `agent_id`
-  - `project_id`
-  - `status` (`active|expired|revoked`)
-  - `expires_at`
-
-- `agent_registry`
-  - `agent_token`
-  - `agent_id`
-  - `role`
-  - `project_id`
-  - `active`
+- `agent_registry` / `agent_sessions`
+  - token-basierte Identitaet + Session-Cache
 
 ---
 
-## 5. Akzeptanzkriterien
+## 4. Akzeptanzkriterien
 
-- AC-001: Jeder Agent kann per `auth` die Feature-Liste seines Projekts abrufen.
-- AC-002: `auth` wird ohne gueltiges Agent-Projekt-Token abgelehnt.
-- AC-003: `auth` erzeugt einen auditierbaren Auth-Eintrag.
-- AC-004: `capabilities list` liefert den aktuellen Stand `planned|available` im Session-Kontext.
-- AC-005: `capabilities show` liefert eine konsistente Detailsicht je Feature-ID.
-- AC-006: Strategist kann auf Basis von `available|planned` Strategien ableiten.
-- AC-007: `capabilities show` und `capabilities list` werden ohne aktive Session abgelehnt.
-- AC-008: `capabilities set-status` erlaubt `planned -> available` nur fuer `sw-techlead` mit Audit-Event.
-- AC-009: `capabilities set-status` wird abgelehnt, wenn Requirements nicht `verified` sind oder Nachweise fehlen.
+- AC-001: `context` liefert Identitaet, erlaubte Aktionen, Capabilities und relevante offene Requests.
+- AC-002: `request create` setzt Default-Status `submitted` ohne Zusatzschritte.
+- AC-003: `request transition` ist fuer Nicht-`nexus` gesperrt.
+- AC-004: `request set-issue` ist nur in `accepted` erlaubt.
+- AC-005: Jeder Statuswechsel wird auditiert.
+- AC-006: Token bestimmt Identitaet je Aufruf; kein Domain/Agent-Override.
+- AC-007: Bestehende `handoff *` Kommandos bleiben kompatibel.
 
----
-
-## 6. Phase 2 (optional)
-
-Erst nach stabilem MVP:
-- `whoami`
-- `capabilities acknowledge`
-- `handoff` Kommandos
-- `workitem` Kommandos
-- erweiterte State-/Req-Mutation

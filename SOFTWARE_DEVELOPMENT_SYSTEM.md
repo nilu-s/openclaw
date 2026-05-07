@@ -71,7 +71,7 @@ Regel:
 
 2. Planung:
 - `sw-architect` plant gegen Requirements-Katalog + Requirements-State.
-- Capability-Preflight vor Planungsstart ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
+- Capability-Preflight vor Planungsstart ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](NEXUSCTL_FUNCTIONS.md).
 
 3. Umsetzung:
 - `sw-builder` implementiert einen klaren Scope auf Branch/PR.
@@ -80,7 +80,7 @@ Regel:
 - `sw-reviewer` prueft Korrektheit, Scope, Tests und Konsistenz zu Goals/State.
 
 5. Governance:
-- `sw-techlead` aktualisiert bei Drift Requirements-Katalog oder Requirements-State.
+- `sw-techlead` aktualisiert bei Inkonsistenzen Requirements-Katalog oder Requirements-State.
 - `sw-techlead` schaltet Feature-Status `planned -> available` ausschliesslich ueber `nexusctl capabilities set-status` frei.
 
 6. Abschluss:
@@ -101,7 +101,7 @@ Wichtig:
 - Die SW-Lane arbeitet nur auf Basis des Handoff-Vertrags und der SW-Requirements-Objekte.
 
 Operative Detailregeln (Gate, Statusmaschine, SLA, Eskalation, Abnahme):
-- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](C:/projects/DebugMyself/openclaw/HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
+- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
 
 ---
 

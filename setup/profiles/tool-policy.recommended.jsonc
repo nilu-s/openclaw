@@ -1,0 +1,12 @@
+{
+  // Copy relevant snippets into openclaw.json only after schema validation.
+  "global": {
+    "tools": { "profile": "coding" }
+  },
+  "agents": {
+    "main": { "tools": { "profile": "coding", "alsoAllow": ["agents_list"] } },
+    "nexus": { "tools": { "profile": "coding", "alsoAllow": ["agents_list"] } },
+    "platform-optimizer": { "tools": { "profile": "coding", "alsoAllow": ["gateway", "agents_list"] } },
+    "specialists": { "tools": { "profile": "coding" } }
+  }
+}

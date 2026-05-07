@@ -26,8 +26,8 @@ Nicht im Scope:
 ### 2.1 Primarobjekt: `handoff_request`
 
 Ein Handoff ist ein eindeutiges Objekt mit stabiler ID (z. B. `HC-2026-0001`).
-- Capability-Preflight vor Handoff-Entscheidungen ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
-- Die Trading-Lane darf fuer diesen Preflight `nexusctl auth`, `nexusctl capabilities list` und `nexusctl capabilities show` nutzen.
+- Capability-Preflight vor Handoff-Entscheidungen ist verpflichtend; die normative CLI-Regel liegt in [NEXUSCTL_FUNCTIONS.md](NEXUSCTL_FUNCTIONS.md).
+- Die Trading-Lane nutzt fuer diesen Preflight primaer `nexusctl context`; kompatibel bleiben `auth` + `capabilities list/show`.
 - Die Trading-Lane darf auf Basis dieser CLI-Informationen Capability-Bedarf vorschlagen; finale Einreichungsentscheidung bleibt bei `trading-strategist`.
 Eine vollstaendige Handoff-Steuerung per `nexusctl` ist Phase-2-Zielbild.
 
@@ -42,8 +42,8 @@ Pflichtfelder bei Einreichung durch Trading:
 - `trading_goals_ref`
 
 Pflichtfelder nach SW-Triage:
-- `goals_ref`
-- `state_ref`
+- `goals_ref` (optional in nexusctl, kann in Issue abgebildet werden)
+- `state_ref` (optional in nexusctl, kann in Issue abgebildet werden)
 
 ### 2.2 Referenzen
 
@@ -52,7 +52,7 @@ Pflichtfelder nach SW-Triage:
 - `state_ref` zeigt auf die zugehoerige State-ID im SW-Requirements-State (z. B. `state://F-001`).
 
 Regel:
-- Kein Build-Start ohne gesetzte `goals_ref` und `state_ref`.
+- `goals_ref` und `state_ref` sollten gesetzt oder im Issue verlinkt sein, blockieren aber den Build-Start NICHT hart, falls sie in nexusctl `null` sind.
 
 ### 2.3 Aufloesbarkeit von `goals_ref` und `state_ref` (normativ)
 
@@ -103,7 +103,7 @@ Regel:
 
 3. SW-Triage und Planbarkeit
 - `sw-architect`: Execute/Decide (Arbeitspakete, `goals_ref`, `state_ref`)
-- `sw-techlead`: Propose bei Goals/State-Drift
+- `sw-techlead`: Propose bei Inkonsistenzen in Requirements-Katalog oder Requirements-State
 
 4. Build und Review
 - `sw-builder`: Execute/Decide fuer Implementierung im Scope
@@ -193,7 +193,6 @@ Regel:
 
 Ein Handoff ist `ready-to-build`, wenn:
 - Pflichtfelder gueltig sind
-- `goals_ref` und `state_ref` gesetzt sind
 - Acceptance Criteria testbar heruntergebrochen sind
 - Verantwortlicher Builder und Scope definiert sind
 
@@ -202,7 +201,7 @@ Ein Handoff ist `ready-to-build`, wenn:
 Eine Capability ist `done`, wenn:
 - Issue, PR, Review und Tests eindeutig verlinkt sind
 - Review ein explizites Ergebnis hat
-- der verbindliche Git-Workflow gemaess [SOFTWARE_DEVELOPMENT_SYSTEM.md](C:/projects/DebugMyself/openclaw/SOFTWARE_DEVELOPMENT_SYSTEM.md) (Abschnitt 8) eingehalten ist
+- der verbindliche Git-Workflow gemaess [SOFTWARE_DEVELOPMENT_SYSTEM.md](SOFTWARE_DEVELOPMENT_SYSTEM.md) (Abschnitt 8) eingehalten ist
 - erforderliche Goals/State-Updates erfolgt sind
 - Abweichungen zum Handoff dokumentiert sind
 

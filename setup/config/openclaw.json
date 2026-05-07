@@ -1,0 +1,581 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "trustedProxies": [],
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}",
+      "allowTailscale": false
+    },
+    "controlUi": {
+      "enabled": true,
+      "basePath": "/openclaw",
+      "allowedOrigins": [
+        "capacitor://localhost",
+        "http://127.0.0.1:18789",
+        "http://localhost:18789"
+      ],
+      "allowInsecureAuth": false,
+      "dangerouslyDisableDeviceAuth": false
+    }
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "skills": {
+    "load": {
+      "watch": true,
+      "watchDebounceMs": 250,
+      "extraDirs": [
+        "/workspace/skills"
+      ]
+    }
+  },
+  "cron": {
+    "enabled": true,
+    "store": "~/.openclaw/cron/jobs.json",
+    "maxConcurrentRuns": 2,
+    "retry": {
+      "maxAttempts": 3,
+      "backoffMs": [
+        60000,
+        120000,
+        300000
+      ],
+      "retryOn": [
+        "rate_limit",
+        "overloaded",
+        "network",
+        "server_error"
+      ]
+    },
+    "sessionRetention": "48h",
+    "runLog": {
+      "maxBytes": "5mb",
+      "keepLines": 3000
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/workspace",
+      "tools": {
+        "profile": "coding"
+      },
+      "models": {
+        "openai-codex/gpt-5.5": {},
+        "openai-codex/gpt-5.4": {},
+        "ollama/kimi-k2.6:cloud": {}
+      },
+      "model": {
+        "primary": "openai-codex/gpt-5.5",
+        "fallbacks": [
+          "ollama/kimi-k2.6:cloud",
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "heartbeat": {
+        "every": "10m"
+      },
+      "memorySearch": {
+        "enabled": true,
+        "sources": [
+          "memory",
+          "sessions"
+        ]
+      },
+      "skills": [
+        "nexusctl_lifecycle",
+        "nexusctl_output_discipline"
+      ]
+    },
+    "list": [
+      {
+        "id": "main",
+        "name": "Tyrion",
+        "workspace": "/workspace/agents/main",
+        "agentDir": "/home/node/.openclaw/agents/main/agent",
+        "identity": {
+          "name": "Tyrion",
+          "emoji": "🧭"
+        },
+        "systemPromptOverride": "You are Tyrion (main), serving as Orchestrator / Operator Interface. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ]
+        },
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "openclaw_orchestration",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline",
+          "handoff_contract"
+        ],
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "agents_list"
+          ]
+        }
+      },
+      {
+        "id": "nexus",
+        "name": "Varys",
+        "workspace": "/workspace/agents/nexus",
+        "agentDir": "/home/node/.openclaw/agents/nexus/agent",
+        "identity": {
+          "name": "Varys",
+          "emoji": "🔀"
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 10000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Varys (nexus), serving as Nexus Lifecycle Steward. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "nexus_gatekeeper",
+          "nexusctl_lifecycle",
+          "nexusctl_github_adapter",
+          "handoff_contract",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "agents_list"
+          ]
+        }
+      },
+      {
+        "id": "platform-optimizer",
+        "name": "Samwell",
+        "workspace": "/workspace/agents/platform-optimizer",
+        "agentDir": "/home/node/.openclaw/agents/platform-optimizer/agent",
+        "identity": {
+          "name": "Samwell",
+          "emoji": "🌱"
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "gateway",
+            "agents_list"
+          ]
+        },
+        "thinkingDefault": "xhigh",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 14000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md",
+            "/workspace/software/repos/trading-system/TRADING_STATE.md"
+          ]
+        },
+        "systemPromptOverride": "You are Samwell (platform-optimizer), serving as OpenClaw Platform Optimizer. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "agent_platform_maintenance",
+          "openclaw_config_safety",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ]
+      },
+      {
+        "id": "sw-architect",
+        "name": "Bran",
+        "workspace": "/workspace/agents/sw-architect",
+        "agentDir": "/home/node/.openclaw/agents/sw-architect/agent",
+        "identity": {
+          "name": "Bran",
+          "emoji": "🏗️"
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 10000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Bran (sw-architect), serving as Software Architect. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "software_delivery_workflow",
+          "capability_release_governance",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "sw-techlead",
+        "name": "Jon",
+        "workspace": "/workspace/agents/sw-techlead",
+        "agentDir": "/home/node/.openclaw/agents/sw-techlead/agent",
+        "identity": {
+          "name": "Jon",
+          "emoji": "🧙‍♂️"
+        },
+        "thinkingDefault": "xhigh",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 10000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Jon (sw-techlead), serving as Software Tech Lead. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "software_delivery_workflow",
+          "capability_release_governance",
+          "nexusctl_github_adapter",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "sw-builder",
+        "name": "Gendry",
+        "workspace": "/workspace/agents/sw-builder",
+        "agentDir": "/home/node/.openclaw/agents/sw-builder/agent",
+        "identity": {
+          "name": "Gendry",
+          "emoji": "⚙️"
+        },
+        "thinkingDefault": "medium",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 10000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Gendry (sw-builder), serving as Software Builder. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "ollama/kimi-k2.6:cloud",
+          "fallbacks": [
+            "openai-codex/gpt-5.5",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "software_delivery_workflow",
+          "implementation_safety",
+          "nexusctl_github_adapter",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "sw-reviewer",
+        "name": "Brienne",
+        "workspace": "/workspace/agents/sw-reviewer",
+        "agentDir": "/home/node/.openclaw/agents/sw-reviewer/agent",
+        "identity": {
+          "name": "Brienne",
+          "emoji": "🔍"
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 10000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Brienne (sw-reviewer), serving as Software Reviewer. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "review_quality_gate",
+          "software_delivery_workflow",
+          "nexusctl_github_adapter",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "trading-strategist",
+        "name": "Olenna",
+        "workspace": "/workspace/agents/trading-strategist",
+        "agentDir": "/home/node/.openclaw/agents/trading-strategist/agent",
+        "identity": {
+          "name": "Olenna",
+          "emoji": "📈"
+        },
+        "thinkingDefault": "xhigh",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 12000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Olenna (trading-strategist), serving as Trading Strategist. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": [
+            "ollama/kimi-k2.6:cloud",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "trading_decision_contract",
+          "handoff_contract",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "trading-analyst",
+        "name": "Aemon",
+        "workspace": "/workspace/agents/trading-analyst",
+        "agentDir": "/home/node/.openclaw/agents/trading-analyst/agent",
+        "identity": {
+          "name": "Aemon",
+          "emoji": "🔬"
+        },
+        "thinkingDefault": "xhigh",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 12000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": [
+            "/workspace/software/repos/trading-system/TRADING_STATE.md",
+            "/workspace/software/repos/trading-system/ARCHITECTURE_MAP.md"
+          ]
+        },
+        "systemPromptOverride": "You are Aemon (trading-analyst), serving as Trading Research Analyst. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "ollama/kimi-k2.6:cloud",
+          "fallbacks": [
+            "openai-codex/gpt-5.5",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "trading_research_evidence",
+          "handoff_contract",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      {
+        "id": "trading-sentinel",
+        "name": "Arya",
+        "workspace": "/workspace/agents/trading-sentinel",
+        "agentDir": "/home/node/.openclaw/agents/trading-sentinel/agent",
+        "identity": {
+          "name": "Arya",
+          "emoji": "🛡️"
+        },
+        "thinkingDefault": "low",
+        "reasoningDefault": "on",
+        "skillsLimits": {
+          "maxSkillsPromptChars": 8000
+        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory",
+            "sessions"
+          ],
+          "extraPaths": []
+        },
+        "systemPromptOverride": "You are Arya (trading-sentinel), serving as Trading Safety Sentinel. Follow the local agent files, the assigned OpenClaw skills, and the Nexus v2 source-of-truth contract. Use the display name only to improve clarity, continuity, and handoff readability; do not roleplay or imitate fictional characters. Lifecycle, safety, evidence, and user instructions always take priority. Prefer nexusctl JSON output for lifecycle decisions.",
+        "model": {
+          "primary": "ollama/kimi-k2.6:cloud",
+          "fallbacks": [
+            "openai-codex/gpt-5.5",
+            "openai-codex/gpt-5.4"
+          ]
+        },
+        "skills": [
+          "trading_safety_monitoring",
+          "handoff_contract",
+          "nexusctl_lifecycle",
+          "nexusctl_output_discipline"
+        ],
+        "tools": {
+          "profile": "coding"
+        }
+      }
+    ]
+  },
+  "memory": {
+    "backend": "builtin",
+    "citations": "auto"
+  },
+  "plugins": {
+    "entries": {
+      "openai": {
+        "enabled": true
+      },
+      "ollama": {
+        "enabled": true
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://host.docker.internal:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "kimi-k2.6:cloud",
+            "name": "Kimi K2.6 Cloud",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 195000,
+            "maxTokens": 128000,
+            "api": "ollama"
+          },
+          {
+            "id": "kimi-k2.5:cloud",
+            "name": "Kimi K2.5 Cloud",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 195000,
+            "maxTokens": 128000,
+            "api": "ollama"
+          }
+        ]
+      }
+    }
+  }
+}

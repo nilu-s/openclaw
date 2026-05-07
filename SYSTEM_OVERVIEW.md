@@ -1,6 +1,6 @@
 # OpenClaw - System Overview
-Version: 5.3
-Date: 2026-04-27
+Version: 5.4
+Date: 2026-04-30
 Status: Active
 
 ---
@@ -15,18 +15,18 @@ Es definiert die Schachtelung, die Domain-Grenzen und die verbindliche Verbindun
 ## 2. Dokumenten-Schachtelung
 
 Level 0:
-- [SYSTEM_OVERVIEW.md](C:/projects/DebugMyself/openclaw/SYSTEM_OVERVIEW.md)
+- [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)
 
 Level 1 Domains:
-- [SOFTWARE_DEVELOPMENT_SYSTEM.md](C:/projects/DebugMyself/openclaw/SOFTWARE_DEVELOPMENT_SYSTEM.md)
-- [TRADING_SYSTEM.md](C:/projects/DebugMyself/openclaw/TRADING_SYSTEM.md)
+- [SOFTWARE_DEVELOPMENT_SYSTEM.md](SOFTWARE_DEVELOPMENT_SYSTEM.md)
+- [TRADING_SYSTEM.md](TRADING_SYSTEM.md)
 
 Level 1 Runtime:
-- [ARCHITECTURE_PLAN.md](C:/projects/DebugMyself/openclaw/ARCHITECTURE_PLAN.md)
-- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](C:/projects/DebugMyself/openclaw/HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
-- [DOCUMENTATION_OWNERSHIP_MATRIX.md](C:/projects/DebugMyself/openclaw/DOCUMENTATION_OWNERSHIP_MATRIX.md)
-- [REQUIREMENTS_CLI_DB_PLAN.md](C:/projects/DebugMyself/openclaw/REQUIREMENTS_CLI_DB_PLAN.md) (Draft, Konzeptphase)
-- [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md) (CLI-Funktionsspezifikation)
+- [ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)
+- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
+- [DOCUMENTATION_OWNERSHIP_MATRIX.md](DOCUMENTATION_OWNERSHIP_MATRIX.md)
+- [REQUIREMENTS_CLI_DB_PLAN.md](REQUIREMENTS_CLI_DB_PLAN.md) (Draft, Konzeptphase)
+- [NEXUSCTL_FUNCTIONS.md](NEXUSCTL_FUNCTIONS.md) (CLI-Funktionsspezifikation)
 
 Software-Repo-Standard:
 - Requirements-Katalog (DB-Objekt, verwaltet ueber `nexusctl`)
@@ -64,7 +64,7 @@ Hinweis:
 ## 5. Handoff-Contract Trading -> Software
 
 Single Source of Truth:
-- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](C:/projects/DebugMyself/openclaw/HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
+- [HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md](HANDOFF_CONTRACT_TRADING_TO_SOFTWARE.md)
 
 ---
 
@@ -74,7 +74,7 @@ Single Source of Truth:
 2. Frage zu Lieferung/Implementierung/Review: Software-Dokument.
    Frage zum erwarteten Inhalt von Requirements-Katalog/Requirements-State: Software-Dokument, Abschnitt 7.
    Frage zu Branching/PR/Merge/Hotfix: Software-Dokument, Abschnitt 8.
-   Frage zur geplanten `nexusctl`-Einfuehrung: [REQUIREMENTS_CLI_DB_PLAN.md](C:/projects/DebugMyself/openclaw/REQUIREMENTS_CLI_DB_PLAN.md).
-   Frage zu `nexusctl`-Befehlen/Parametern/Rechten: [NEXUSCTL_FUNCTIONS.md](C:/projects/DebugMyself/openclaw/NEXUSCTL_FUNCTIONS.md).
+   Frage zur geplanten `nexusctl`-Einfuehrung: [REQUIREMENTS_CLI_DB_PLAN.md](REQUIREMENTS_CLI_DB_PLAN.md).
+   Frage zu `nexusctl`-Befehlen/Parametern/Rechten: [NEXUSCTL_FUNCTIONS.md](NEXUSCTL_FUNCTIONS.md).
 3. Frage zu Strategie/Research/Monitoring: Trading-Dokument.
 4. Frage zu Pfaden/Container/Runtime: Architekturplan.

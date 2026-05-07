@@ -1,179 +1,122 @@
 # OpenClaw - nexusctl Function Specification
-Version: 3.3
-Date: 2026-04-26
-Status: Draft (MVP reduziert)
+Version: 4.0
+Date: 2026-04-29
+Status: Verbindlich
 
 ---
 
 ## 1. Ziel
 
-`nexusctl` hat im MVP genau einen Kernzweck:
-- Agent authentifiziert sich einmal und erhaelt sofort die komplette Feature-Liste.
+`nexusctl` stellt einen schlanken, token-gebundenen Agentenzugang bereit.
+Normatives Bedienziel:
 
-Danach kann der Agent einzelne Features ueber `capabilities show` im Detail abfragen, ohne das Token erneut zu senden.
+1. `context` fuer den Gesamtueberblick
+2. `request create` fuer One-Call-Bedarfsmeldung
+3. `request list/show` fuer laufende Nachverfolgung
 
----
-
-## 2. MVP-Prinzip (klein halten)
-
-- Ein verpflichtender Einstieg: `auth`.
-- Eine Listenabfrage: `capabilities list`.
-- Eine Detailabfrage: `capabilities show`.
-- Eine kontrollierte Statusmutation: `capabilities set-status`.
-- Session statt wiederholter Token-Uebergabe.
-- Keine Ticket-/PR-Automation im MVP.
-- Keine komplexe Workflow-Orchestrierung im MVP.
+Lifecycle-Mutationen bleiben bei `nexus`.
 
 ---
 
-## 3. Identity und Session Model
+## 2. Identity und Sicherheitsmodell
 
-`nexusctl` nutzt projektgebundene Agent-Tokens:
-- Es gibt genau ein Token pro Paar (`agent_id`, `project_id`).
-- `agent_token` wird auf `agent_id`, `role` und `project_id` aufgeloest.
-
-Session-Regel:
-- Scope ist `agent_id + project_id` (nicht terminalgebunden).
-- `auth` erzeugt eine aktive Session fuer den Agenten im Projektkontext.
-- Folgeaufrufe nutzen diese Session und brauchen kein Token.
-- Mehrere Terminals desselben Agenten koennen dieselbe aktive Session nutzen.
-- Ohne aktive Session werden Folgeaufrufe abgelehnt.
-- Session-TTL im MVP: 60 Minuten, danach ist Re-Auth erforderlich.
-
-Token-Aufloesung:
-1. CLI-Flag: `--agent-token`
-2. Env-Fallback: `NEXUS_AGENT_TOKEN`
+- Jeder Aufruf ist token-gebunden (`NEXUS_AGENT_TOKEN` oder Seed-Token-Aufloesung).
+- Identitaet wird serverseitig auf `agent_id`, `role`, `domain`, `project_id` aufgeloest.
+- Client-seitige Overrides fuer Domain/Agent sind unzulaessig.
+- Lokaler Session-State ist nur Transport-Cache, nicht Autoritaetsquelle.
 
 ---
 
-## 4. MVP Command Surface
+## 3. Command Surface (normativ)
+
+Primarflaeche:
 
 ```text
-nexusctl auth --agent-token <token> [--output table|json]
+nexusctl context [--output table|json]
 
-nexusctl capabilities list [--status all|planned|available] [--output table|json]
+nexusctl request create --objective <text> --missing-capability <text> --business-impact <text> --expected-behavior <text> --acceptance-criteria <text> --risk-class <low|medium|high|critical> --priority <P0|P1|P2|P3> --trading-goals-ref <ref> [--output table|json]
 
-nexusctl capabilities show <capability-id> [--output table|json]
+nexusctl request list [--status all|draft|submitted|gate-rejected|accepted|needs-planning|ready-to-build|in-build|in-review|review-failed|state-update-needed|done|adoption-pending|closed|cancelled] [--limit 100] [--output table|json]
 
-nexusctl capabilities set-status <capability-id> --to planned|available --reason <text> [--output table|json]
+nexusctl request show <request-id> [--output table|json]
 
-nexusctl handoff submit --objective <text> --missing-capability <text> --business-impact <text> --expected-behavior <text> --acceptance-criteria <text> --risk-class <low|medium|high|critical> --priority <P0|P1|P2|P3> --trading-goals-ref <ref> [--output table|json]
+nexusctl request transition <request-id> --to <status> --reason <text> [--output table|json]
 
-nexusctl handoff list [--status submitted] [--limit 100] [--output table|json]
-
-nexusctl handoff set-issue <handoff-id> --issue-ref <ref> [--issue-number <n>] [--issue-url <url>] [--output table|json]
+nexusctl request set-issue <request-id> --issue-ref <ref> [--issue-number <n>] [--issue-url <url>] [--output table|json]
 ```
 
-### 4.1 Kommandozwecke
+Kompatibilitaets-Aliases:
 
-- `auth`
-  - validiert Token.
-  - setzt Agent-, Rollen- und Projektkontext aus Token-Mapping.
-  - liefert als Antwort automatisch die Feature-Liste fuer das gemappte Projekt.
-  - erzeugt einen Audit-Eintrag.
-
-- `capabilities list`
-  - liefert die aktuelle Capability-Liste im Session-Kontext.
-  - dient als expliziter Re-Check nach `auth`.
-
-- `capabilities show`
-  - liefert die Detailsicht fuer genau eine Capability-ID.
-  - nutzt die aktive Session aus `auth`.
-  - sendet im Normalfall kein Token mehr mit.
-
-- `capabilities set-status`
-  - aendert den Status einer Capability.
-  - im MVP ist nur `planned -> available` als Freischaltung vorgesehen.
-  - nur fuer `sw-techlead` erlaubt.
-  - prueft vor Freischaltung die Gate-Regeln (siehe Abschnitt 8.1).
-
-- `handoff list`
-  - liefert offene Handoffs fuer Orchestrierungsrollen im Session-Kontext.
-  - default-filter ist `submitted`.
-
-- `handoff set-issue`
-  - verlinkt ein vorhandenes Handoff mit GitHub-Issue-Referenz.
-  - nur fuer `nexus` erlaubt.
-  - erstellt selbst kein Ticket, sondern persistiert koordinierte Linkage.
+- `handoff submit/list/set-issue` bleiben kompatibel und mappen intern auf denselben Request-Store.
+- `auth`, `capabilities list/show/set-status` bleiben erhalten.
 
 ---
 
-## 5. Ausgabeformat
+## 4. Rollenrechte
 
-`auth --output json`:
-
-```json
-{
-  "ok": true,
-  "auth_id": "AUTH-2026-0001",
-  "session_id": "S-2026-0001",
-  "agent_id": "trading-strategist-01",
-  "role": "trading-strategist",
-  "project_id": "trading-system",
-  "domain": "Trading",
-  "timestamp": "2026-04-26T12:00:00Z",
-  "capabilities": [
-    {
-      "capability_id": "F-001",
-      "title": "Paper Trading",
-      "status": "available"
-    },
-    {
-      "capability_id": "F-002",
-      "title": "Kraken API Integration",
-      "status": "planned"
-    }
-  ]
-}
-```
-
-`capabilities show --output json`:
-
-```json
-{
-  "capability_id": "F-001",
-  "title": "Paper Trading",
-  "status": "available",
-  "subfunctions": [
-    "SF-001.1",
-    "SF-001.2"
-  ],
-  "requirements": [
-    "FR-001.1.1",
-    "FR-001.2.1"
-  ]
-}
-```
-
-`capabilities set-status --output json`:
-
-```json
-{
-  "ok": true,
-  "event_id": "CAP-STATUS-2026-0001",
-  "capability_id": "F-001",
-  "old_status": "planned",
-  "new_status": "available",
-  "reason": "All requirements verified and evidence linked.",
-  "agent_id": "sw-techlead-01",
-  "project_id": "trading-system",
-  "timestamp": "2026-04-26T13:00:00Z"
-}
-```
-
----
-
-## 6. Rollenrechte (MVP)
-
-| Kommando | trading-* | sw-* | nexus | main |
+| Kommando | trading-strategist | trading-analyst / trading-sentinel | sw-* | nexus |
 |---|---|---|---|---|
-| `auth` | Allow (Token Pflicht) | Allow (Token Pflicht) | Allow (Token Pflicht) | Allow (Token Pflicht) |
-| `capabilities list` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
-| `capabilities show` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
-| `capabilities set-status` | Deny | Allow (`sw-techlead` only) | Deny | Deny |
-| `handoff submit` | Allow (`trading-strategist` only) | Deny | Deny | Deny |
-| `handoff list` | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) | Allow (aktive Session Pflicht) |
-| `handoff set-issue` | Deny | Deny | Allow (`nexus` only) | Deny |
+| `context` | Allow | Allow | Allow | Allow |
+| `request create` | Allow | Deny | Deny | Deny |
+| `request list/show` | scoped Allow | scoped Allow | scoped Allow | full Allow |
+| `request transition` | Deny | Deny | Deny | Allow |
+| `request set-issue` | Deny | Deny | Deny | Allow |
+| `capabilities set-status` | Deny | Deny | `sw-techlead` only | Deny |
+
+Hinweis:
+- `request set-issue` ist nur im Status `accepted` zulaessig.
+- Issue-Linkage vor `accepted` ist unzulaessig.
+
+---
+
+## 5. Lifecycle-Regeln fuer Requests
+
+Kanonische Status:
+
+1. `draft`
+2. `submitted`
+3. `gate-rejected`
+4. `accepted`
+5. `needs-planning`
+6. `ready-to-build`
+7. `in-build`
+8. `in-review`
+9. `review-failed`
+10. `state-update-needed`
+11. `done`
+12. `adoption-pending`
+13. `closed`
+14. `cancelled`
+
+Uebergaenge:
+- `draft -> submitted|cancelled`
+- `submitted -> accepted|gate-rejected`
+- `gate-rejected -> draft|cancelled`
+- `accepted -> needs-planning`
+- `needs-planning -> ready-to-build|cancelled`
+- `ready-to-build -> in-build`
+- `in-build -> in-review|cancelled`
+- `in-review -> done|review-failed|state-update-needed`
+- `review-failed -> in-build`
+- `state-update-needed -> in-review`
+- `done -> adoption-pending|closed`
+- `adoption-pending -> closed|needs-planning`
+
+Jeder Wechsel wird mit Grund, Actor und Zeitstempel auditiert.
+
+---
+
+## 6. Kontextvertrag (`context`)
+
+`context` liefert in einem Aufruf:
+
+- aufgeloeste Agent-Identitaet (`agent_id`, `role`, `domain`, `project_id`)
+- erlaubte Aktionen (`allowed_actions`)
+- Capability-Snapshot
+- relevante offene Requests (rollenbasiert gescoped)
+
+Ziel:
+- Minimaler operativer Einstieg ohne mehrstufiges Kommando-Set.
 
 ---
 
@@ -183,47 +126,13 @@ nexusctl handoff set-issue <handoff-id> --issue-ref <ref> [--issue-number <n>] [
 - `2`: Validation Error
 - `3`: Not Found
 - `4`: Permission Denied
-- `6`: Precondition Failed (z. B. keine aktive Session)
+- `6`: Precondition Failed
 - `10`: Infrastructure Error
 
 ---
 
-## 8. Audit-Pflicht (MVP)
+## 8. Abwaertskompatibilitaet
 
-Nur fuer `auth` verpflichtend:
-- `auth_id`
-- `session_id`
-- `agent_id`
-- `role`
-- `project_id`
-- `domain`
-- `timestamp`
+- Bestehende Flows mit `auth` + `handoff *` bleiben lauffaehig.
+- Neues Lean-Verhalten priorisiert `context` + `request *`.
 
-Fuer `capabilities set-status` verpflichtend:
-- `event_id`
-- `capability_id`
-- `old_status`
-- `new_status`
-- `reason`
-- `agent_id`
-- `project_id`
-- `timestamp`
-
-### 8.1 Gate-Regeln fuer `planned -> available`
-
-Eine Freischaltung ist nur gueltig, wenn:
-- alle zugeordneten `FR-...` im Requirements-State auf `verified` stehen,
-- Nachweise vorhanden sind (`issue_ref`, `pr_ref`, `test_ref` nicht `none`),
-- Aufruferrolle `sw-techlead` ist.
-
----
-
-## 9. Phase 2 (nicht im MVP)
-
-Die folgenden Bereiche sind bewusst aus dem MVP entfernt:
-- `whoami`
-- `capabilities acknowledge`
-- `handoff` Befehlsfamilie
-- `workitem` Befehlsfamilie
-- `req` Schreibbefehle
-- Snapshot-Export
