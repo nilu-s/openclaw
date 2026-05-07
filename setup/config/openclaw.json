@@ -2,7 +2,7 @@
   "gateway": {
     "mode": "local",
     "port": 18789,
-    "bind": "lan",
+    "bind": "127.0.0.1",
     "trustedProxies": [],
     "auth": {
       "mode": "token",
@@ -22,7 +22,7 @@
     }
   },
   "tools": {
-    "profile": "coding"
+    "profile": "read-only"
   },
   "skills": {
     "load": {
@@ -61,7 +61,7 @@
     "defaults": {
       "workspace": "/workspace",
       "tools": {
-        "profile": "coding"
+        "profile": "read-only"
       },
       "models": {
         "openai-codex/gpt-5.5": {},
@@ -122,10 +122,12 @@
           "handoff_contract"
         ],
         "tools": {
-          "profile": "coding",
+          "profile": "read-only",
           "alsoAllow": [
             "agents_list"
-          ]
+          ],
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -168,10 +170,12 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding",
+          "profile": "read-only",
           "alsoAllow": [
             "agents_list"
-          ]
+          ],
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -188,6 +192,12 @@
           "alsoAllow": [
             "gateway",
             "agents_list"
+          ],
+          "denyProtectedPaths": [
+            "**/.env",
+            "**/.env.*",
+            "**/*secret*",
+            "**/*credential*"
           ]
         },
         "thinkingDefault": "xhigh",
@@ -260,7 +270,9 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "read-only",
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -303,7 +315,13 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "coding",
+          "denyProtectedPaths": [
+            "**/.env",
+            "**/.env.*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
         }
       },
       {
@@ -346,7 +364,13 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "coding",
+          "denyProtectedPaths": [
+            "**/.env",
+            "**/.env.*",
+            "**/*secret*",
+            "**/*credential*"
+          ]
         }
       },
       {
@@ -389,7 +413,9 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "read-only",
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -431,7 +457,9 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "read-only",
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -474,7 +502,9 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "read-only",
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       },
       {
@@ -514,7 +544,9 @@
           "nexusctl_output_discipline"
         ],
         "tools": {
-          "profile": "coding"
+          "profile": "read-only",
+          "denyMutatingFilesystem": true,
+          "denyShellExec": true
         }
       }
     ]

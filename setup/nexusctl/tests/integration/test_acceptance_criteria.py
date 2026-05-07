@@ -3,7 +3,11 @@ from __future__ import annotations
 import io
 import json
 
+import pytest
+
 from nexusctl.cli import run
+
+pytestmark = pytest.mark.integration
 
 
 def test_ac_001_auth_returns_feature_list(cli_env):

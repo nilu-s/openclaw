@@ -3,12 +3,17 @@ from __future__ import annotations
 import io
 import json
 import re
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import pytest
 
 from nexusctl.backend.server import BackendConfig, start_server
 from nexusctl.backend.storage import Storage, initialize_database, seed_mvp_data
 from nexusctl.cli import run
+import nexusctl.api as api_module
+
+pytestmark = pytest.mark.integration
 
 
 def _auth(base_url: str, token: str) -> dict:
@@ -16,9 +21,9 @@ def _auth(base_url: str, token: str) -> dict:
         url=f"{base_url}/v1/nexus/auth",
         method="POST",
         data=json.dumps({"agent_token": token}).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/json", "Accept": "application/json", "Connection": "close"},
     )
-    with urlopen(req, timeout=5) as response:
+    with urlopen(req, timeout=2) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -31,6 +36,13 @@ def test_server_rejects_non_localhost_bind_without_tls(tmp_path):
         return
     running.stop()
     raise AssertionError("expected non-localhost bind to be rejected without TLS")
+
+
+def test_embedded_server_stops_without_requests(tmp_path):
+    db_path = tmp_path / "nexusctl.sqlite3"
+    initialize_database(db_path)
+    running = start_server(BackendConfig(host="127.0.0.1", port=0, db_path=db_path))
+    running.stop(timeout_seconds=1.0)
 
 
 def test_seed_defaults_do_not_accept_demo_tokens(tmp_path):
@@ -68,10 +80,16 @@ def test_cli_rejects_insecure_remote_http_base_url(cli_env):
     assert rc == 2
 
 
-def test_cli_allows_insecure_remote_http_base_url_when_explicitly_enabled(cli_env):
+@pytest.mark.networkish
+def test_cli_allows_insecure_remote_http_base_url_when_explicitly_enabled(cli_env, monkeypatch):
+    def fail_fast_urlopen(*_args, **_kwargs):
+        raise URLError("network disabled in test")
+
+    monkeypatch.setattr(api_module, "urlopen", fail_fast_urlopen)
     env = dict(cli_env)
     env["NEXUSCTL_API_BASE_URL"] = "http://192.0.2.20:8080"
     env["NEXUSCTL_ALLOW_INSECURE_REMOTE"] = "true"
+    env["NEXUSCTL_AUTH_TIMEOUT_SECONDS"] = "0.2"
     rc = run(["auth", "--agent-token", "tok_trading"], env=env)
     assert rc == 10
 
@@ -139,15 +157,18 @@ def test_large_json_payload_is_rejected(backend_server):
         url=f"{backend_server.base_url}/v1/nexus/auth",
         method="POST",
         data=json.dumps({"agent_token": "tok_trading", "padding": "x" * (70 * 1024)}).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/json", "Accept": "application/json", "Connection": "close"},
     )
     try:
-        with urlopen(request, timeout=5):
+        with urlopen(request, timeout=2):
             raise AssertionError("expected oversized payload to be rejected")
     except HTTPError as exc:
-        payload = json.loads(exc.read().decode("utf-8"))
-        assert exc.code == 400
-        assert payload["error_code"] == "NX-VAL-001"
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            assert exc.code == 400
+            assert payload["error_code"] == "NX-VAL-001"
+        finally:
+            exc.close()
 
 
 def test_agent_header_must_match_session(backend_server):
@@ -159,15 +180,19 @@ def test_agent_header_must_match_session(backend_server):
             "Accept": "application/json",
             "X-Nexus-Session-Id": auth_payload["session_id"],
             "X-Nexus-Agent-Id": "sw-techlead-01",
+            "Connection": "close",
         },
     )
     try:
-        with urlopen(request, timeout=5):
+        with urlopen(request, timeout=2):
             raise AssertionError("expected mismatched agent header to be rejected")
     except HTTPError as exc:
-        payload = json.loads(exc.read().decode("utf-8"))
-        assert exc.code == 403
-        assert payload["error_code"] == "NX-PERM-001"
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            assert exc.code == 403
+            assert payload["error_code"] == "NX-PERM-001"
+        finally:
+            exc.close()
 
 
 def test_capabilities_endpoint_rejects_domain_query_override(backend_server):
@@ -179,12 +204,16 @@ def test_capabilities_endpoint_rejects_domain_query_override(backend_server):
             "Accept": "application/json",
             "X-Nexus-Session-Id": auth_payload["session_id"],
             "X-Nexus-Agent-Id": auth_payload["agent_id"],
+            "Connection": "close",
         },
     )
     try:
-        with urlopen(request, timeout=5):
+        with urlopen(request, timeout=2):
             raise AssertionError("expected domain query override to be rejected")
     except HTTPError as exc:
-        payload = json.loads(exc.read().decode("utf-8"))
-        assert exc.code == 400
-        assert payload["error_code"] == "NX-VAL-001"
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            assert exc.code == 400
+            assert payload["error_code"] == "NX-VAL-001"
+        finally:
+            exc.close()

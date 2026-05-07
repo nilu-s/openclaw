@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from nexusctl.backend.integrations.github import derive_review_state
 
 
+
+pytestmark = pytest.mark.unit
 def test_review_state_latest_reviewer_changes_requested_wins():
     assert derive_review_state([
         {"user": {"login": "a"}, "state": "APPROVED", "submitted_at": "2026-01-01T00:00:00Z"},

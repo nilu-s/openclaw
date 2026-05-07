@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import secrets
+import shutil
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from nexusctl.backend.integrations.github import (
 )
 from nexusctl.backend.integrations.github_models import GitHubRepository
 from nexusctl.backend.integrations.github_templates import render_issue_body
+from nexusctl.backend.storage_modules.github_events import encode_payload, event_target_from_payload
 
 
 def _utc_now() -> datetime:
@@ -41,6 +43,12 @@ def _parse_iso(value: str) -> datetime:
 
 _PBKDF2_ITERATIONS = 200_000
 _RANDOM_ID_HEX_CHARS = 16
+_GITHUB_PR_SYNC_MAX_AGE = timedelta(minutes=5)
+_AUTH_FAILURE_WINDOW = timedelta(minutes=5)
+_AUTH_LOCKOUT_DURATION = timedelta(minutes=15)
+_AUTH_MAX_FAILURES = 5
+_SCOPE_LEASE_DEFAULT_TTL_MINUTES = 120
+_GITHUB_REQUIRED_POLICY_CHECKS = {"protected_paths", "required_checks", "review_state", "fresh_pr_sync", "branch_protection", "codeowners"}
 _REQUEST_RISK_CLASSES = {"low", "medium", "high", "critical"}
 _REQUEST_PRIORITIES = {"P0", "P1", "P2", "P3"}
 _SYSTEM_STATUSES = {"planned", "active", "paused", "retired"}
@@ -86,6 +94,22 @@ _REQUEST_TRANSITIONS: dict[str, set[str]] = {
     "closed": set(),
     "cancelled": set(),
 }
+_WORK_MANAGED_STATUSES = {
+    "needs-planning",
+    "ready-to-build",
+    "in-build",
+    "in-review",
+    "approved",
+    "review-failed",
+    "state-update-needed",
+    "done",
+}
+_REVIEWER_VISIBLE_WORK_STATUSES = {
+    "in-review",
+    "approved",
+    "review-failed",
+    "state-update-needed",
+}
 
 # Server-side source of truth for default role scopes. Explicit DB grants are stored in
 # agent_scope_grants; this table is seeded from these defaults and can be changed by nexus.
@@ -99,13 +123,13 @@ _ROLE_SCOPE_DEFAULTS: dict[str, list[tuple[str, str]]] = {
         ("*", "context.read"), ("*", "systems.read"), ("*", "systems.manage"),
         ("*", "goals.read"), ("*", "goals.create"), ("*", "goals.update-status"),
         ("*", "capabilities.read"), ("*", "request.read"), ("*", "request.transition"),
-        ("*", "scopes.read"), ("*", "runtime_tools.read"),
+        ("*", "scopes.read"), ("*", "scopes.manage"), ("*", "runtime_tools.read"),
         ("*", "runtime_tools.manage"), ("*", "work.read"), ("*", "work.plan"),
         ("*", "work.assign"), ("*", "work.implementation-context.set"), ("*", "work.plan.approve"),
         ("*", "work.transition"), ("*", "reviews.read"), ("*", "reviews.submit"),
         ("*", "repos.read"), ("*", "repos.manage"), ("*", "github.repos.read"),
         ("*", "github.issue.sync"), ("*", "github.pr.sync"), ("*", "github.status.read"),
-        ("*", "github.evidence.create"), ("*", "github.webhook.receive"),
+        ("*", "github.evidence.create"), ("*", "github.webhook.receive"), ("*", "agents.token.rotate"),
     ],
     "trading-strategist": [
         ("trading-system", "context.read"), ("trading-system", "systems.read"),
@@ -165,7 +189,7 @@ _ROLE_SCOPE_DEFAULTS: dict[str, list[tuple[str, str]]] = {
         ("software-domain", "github.pr.link"), ("software-domain", "github.pr.sync"),
         ("software-domain", "github.repos.sync"), ("software-domain", "github.repos.read"),
         ("software-domain", "github.status.read"), ("software-domain", "github.evidence.create"),
-        ("software-domain", "github.policy.override"),
+        ("software-domain", "github.policy.override"), ("software-domain", "scopes.manage"),
     ],
     "platform-optimizer": [
         ("agent-platform", "context.read"), ("agent-platform", "systems.read"),
@@ -342,6 +366,13 @@ def initialize_database(db_path: Path) -> None:
                 FOREIGN KEY(goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS goal_ref_aliases (
+                goal_ref TEXT PRIMARY KEY,
+                goal_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS capabilities (
                 capability_id TEXT PRIMARY KEY,
                 system_id TEXT NOT NULL,
@@ -430,6 +461,57 @@ def initialize_database(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_agent_scope_grants_agent ON agent_scope_grants(agent_id, system_id, scope);
             CREATE INDEX IF NOT EXISTS idx_agent_scope_grants_role ON agent_scope_grants(role, system_id, scope);
 
+            CREATE TABLE IF NOT EXISTS scope_leases (
+                lease_id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                system_id TEXT NOT NULL DEFAULT '*',
+                scope TEXT NOT NULL,
+                resource_pattern TEXT NOT NULL DEFAULT '*',
+                request_id TEXT,
+                reason TEXT NOT NULL,
+                granted_by TEXT NOT NULL,
+                approved_by TEXT,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_scope_leases_agent ON scope_leases(agent_id, system_id, scope);
+            CREATE INDEX IF NOT EXISTS idx_scope_leases_request ON scope_leases(request_id);
+
+            CREATE TABLE IF NOT EXISTS event_log (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                actor_agent_id TEXT,
+                actor_role TEXT,
+                target_type TEXT,
+                target_id TEXT,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_event_log_target ON event_log(target_type, target_id, created_at);
+            CREATE TRIGGER IF NOT EXISTS event_log_no_update BEFORE UPDATE ON event_log BEGIN
+                SELECT RAISE(ABORT, 'event_log is append-only');
+            END;
+            CREATE TRIGGER IF NOT EXISTS event_log_no_delete BEFORE DELETE ON event_log BEGIN
+                SELECT RAISE(ABORT, 'event_log is append-only');
+            END;
+
+            CREATE TABLE IF NOT EXISTS tool_guardrail_events (
+                guardrail_id TEXT PRIMARY KEY,
+                tool_id TEXT NOT NULL,
+                request_id TEXT,
+                actor_agent_id TEXT NOT NULL,
+                decision TEXT NOT NULL CHECK(decision IN ('allow','deny','approval_required')),
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS auth_log (
                 auth_id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -486,6 +568,7 @@ def initialize_database(db_path: Path) -> None:
                 target_repo_id TEXT,
                 branch TEXT,
                 assigned_agent_id TEXT,
+                reviewer_agent_id TEXT,
                 sanitized_summary TEXT,
                 implementation_context_json TEXT NOT NULL DEFAULT '{}',
                 implementation_context_updated_by TEXT,
@@ -530,6 +613,9 @@ def initialize_database(db_path: Path) -> None:
                 github_html_url TEXT,
                 github_sync_enabled INTEGER NOT NULL DEFAULT 0,
                 github_last_synced_at TEXT,
+                github_branch_protection_state TEXT NOT NULL DEFAULT 'unknown',
+                github_codeowners_state TEXT NOT NULL DEFAULT 'unknown',
+                github_required_checks_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY(system_id) REFERENCES systems(system_id) ON DELETE CASCADE
@@ -576,6 +662,7 @@ def initialize_database(db_path: Path) -> None:
                 review_state TEXT NOT NULL DEFAULT 'unknown',
                 checks_state TEXT NOT NULL DEFAULT 'unknown',
                 policy_state TEXT NOT NULL DEFAULT 'unknown',
+                policy_checks_json TEXT NOT NULL DEFAULT '[]',
                 changed_files_json TEXT NOT NULL DEFAULT '[]',
                 commits_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
@@ -584,6 +671,17 @@ def initialize_database(db_path: Path) -> None:
                 last_synced_at TEXT NOT NULL,
                 FOREIGN KEY(request_id) REFERENCES requests(request_id) ON DELETE CASCADE,
                 FOREIGN KEY(repo_id) REFERENCES repositories(repo_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS github_alerts (
+                alert_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                severity TEXT NOT NULL CHECK(severity IN ('info', 'warning', 'critical')),
+                request_id TEXT,
+                event_id TEXT,
+                message TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                resolved_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS github_events (
@@ -624,9 +722,21 @@ def initialize_database(db_path: Path) -> None:
             );
             """
         )
+        request_columns = _table_columns(conn, "requests")
+        if "reviewer_agent_id" not in request_columns:
+            conn.execute("ALTER TABLE requests ADD COLUMN reviewer_agent_id TEXT")
+        repo_columns = _table_columns(conn, "repositories")
+        for column, ddl in {
+            "github_branch_protection_state": "ALTER TABLE repositories ADD COLUMN github_branch_protection_state TEXT NOT NULL DEFAULT 'unknown'",
+            "github_codeowners_state": "ALTER TABLE repositories ADD COLUMN github_codeowners_state TEXT NOT NULL DEFAULT 'unknown'",
+            "github_required_checks_json": "ALTER TABLE repositories ADD COLUMN github_required_checks_json TEXT NOT NULL DEFAULT '[]'",
+        }.items():
+            if column not in repo_columns:
+                conn.execute(ddl)
+        _record_schema_migrations(conn)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_registry_token_hash ON agent_registry(agent_token_hash)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_request_work_target ON requests(target_system_id, assigned_agent_id, target_repo_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_request_work_target ON requests(target_system_id, assigned_agent_id, reviewer_agent_id, target_repo_id)")
         conn.commit()
     finally:
         conn.close()
@@ -740,6 +850,21 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
             ],
         )
         conn.executemany(
+            "INSERT OR IGNORE INTO goal_ref_aliases(goal_ref, goal_id, created_at) VALUES (?, ?, ?)",
+            [
+                ("TG-001", "TG-001", timestamp),
+                ("trading-goal://g-001/paper-baseline", "TG-001", timestamp),
+                ("trading-goal://g-002/replay-determinism", "TG-001", timestamp),
+                ("trading-goal://g-003/queue-replay", "TG-001", timestamp),
+                ("TG-002", "TG-002", timestamp),
+                ("trading-goal://marketdata/replayable-ingestion", "TG-002", timestamp),
+                ("TG-003", "TG-003", timestamp),
+                ("trading-goal://risk/limit-hard-stop", "TG-003", timestamp),
+                ("RG-001", "RG-001", timestamp),
+                ("research-goal://source-bound-reports", "RG-001", timestamp),
+            ],
+        )
+        conn.executemany(
             "INSERT INTO capabilities(capability_id, system_id, domain, title, status) VALUES (?, ?, ?, ?, ?)",
             [
                 ("F-001", "trading-system", "Trading", "Paper Trading", "planned"),
@@ -847,7 +972,23 @@ def seed_mvp_data(db_path: Path, *, seed_tokens: dict[str, str] | None = None) -
         conn.close()
 
 
+def _seed_missing_goal_ref_aliases(conn: sqlite3.Connection) -> None:
+    timestamp = _iso(_utc_now())
+    aliases = [
+        ("TG-001", "TG-001", timestamp),
+        ("trading-goal://g-001/paper-baseline", "TG-001", timestamp),
+        ("TG-002", "TG-002", timestamp),
+        ("trading-goal://marketdata/replayable-ingestion", "TG-002", timestamp),
+        ("TG-003", "TG-003", timestamp),
+        ("trading-goal://risk/limit-hard-stop", "TG-003", timestamp),
+        ("RG-001", "RG-001", timestamp),
+        ("research-goal://source-bound-reports", "RG-001", timestamp),
+    ]
+    conn.executemany("INSERT OR IGNORE INTO goal_ref_aliases(goal_ref, goal_id, created_at) VALUES (?, ?, ?)", aliases)
+
+
 def _seed_missing_scope_defaults(conn: sqlite3.Connection) -> None:
+    _seed_missing_goal_ref_aliases(conn)
     timestamp = _iso(_utc_now())
     rows: list[tuple[str, str | None, str | None, str, str, str, str, str, None, None]] = []
     for role, grants in sorted(_ROLE_SCOPE_DEFAULTS.items()):
@@ -874,6 +1015,18 @@ def _seed_missing_scope_defaults(conn: sqlite3.Connection) -> None:
         )
 
 
+
+def _record_schema_migrations(conn: sqlite3.Connection) -> None:
+    timestamp = _iso(_utc_now())
+    rows = [
+        ("0001_base", "base nexus schema", timestamp),
+        ("0002_operational_hardening", "scope leases, append-only events, backups, tool guardrails, GitHub policy gates", timestamp),
+    ]
+    conn.executemany(
+        "INSERT OR IGNORE INTO schema_migrations(version, description, applied_at) VALUES (?, ?, ?)",
+        rows,
+    )
+
 @dataclass
 class SessionContext:
     session_id: str
@@ -886,8 +1039,10 @@ class SessionContext:
 class Storage:
     def __init__(self, db_path: Path, github_client: Any | None = None):
         self._db_path = db_path
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._github_client = github_client
+        self._auth_failures: dict[str, list[datetime]] = {}
+        self._auth_lockouts: dict[str, datetime] = {}
 
     def _github_client_or_default(self) -> Any:
         if self._github_client is None:
@@ -898,11 +1053,41 @@ class Storage:
         conn = sqlite3.connect(self._db_path)
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.row_factory = sqlite3.Row
         return conn
 
+    @staticmethod
+    def _auth_fingerprint(agent_token: str) -> str:
+        return hashlib.sha256(agent_token.encode("utf-8")).hexdigest()
+
+    def _check_auth_rate_limit(self, agent_token: str) -> None:
+        now = _utc_now()
+        fingerprint = self._auth_fingerprint(agent_token)
+        locked_until = self._auth_lockouts.get(fingerprint)
+        if locked_until and locked_until > now:
+            raise NexusError("NX-PERM-002", "too many failed auth attempts; token is temporarily locked")
+        if locked_until and locked_until <= now:
+            self._auth_lockouts.pop(fingerprint, None)
+
+    def _record_auth_failure(self, agent_token: str) -> None:
+        now = _utc_now()
+        fingerprint = self._auth_fingerprint(agent_token)
+        cutoff = now - _AUTH_FAILURE_WINDOW
+        attempts = [item for item in self._auth_failures.get(fingerprint, []) if item > cutoff]
+        attempts.append(now)
+        self._auth_failures[fingerprint] = attempts
+        if len(attempts) >= _AUTH_MAX_FAILURES:
+            self._auth_lockouts[fingerprint] = now + _AUTH_LOCKOUT_DURATION
+
+    def _clear_auth_failures(self, agent_token: str) -> None:
+        fingerprint = self._auth_fingerprint(agent_token)
+        self._auth_failures.pop(fingerprint, None)
+        self._auth_lockouts.pop(fingerprint, None)
+
     def authenticate(self, *, agent_token: str) -> dict[str, Any]:
         with self._lock:
+            self._check_auth_rate_limit(agent_token)
             conn = self._connect()
             try:
                 rows = conn.execute(
@@ -927,7 +1112,9 @@ class Storage:
                     None,
                 )
                 if row is None:
+                    self._record_auth_failure(agent_token)
                     raise NexusError("NX-PERM-001", "invalid or inactive token")
+                self._clear_auth_failures(agent_token)
                 auth_id = _random_id("AUTH-2026-")
                 session_id = _random_id("S-2026-")
                 timestamp = _utc_now()
@@ -980,6 +1167,30 @@ class Storage:
             finally:
                 conn.close()
 
+    def rotate_agent_token(self, *, actor: SessionContext, target_agent_id: str, new_token: str | None = None) -> dict[str, Any]:
+        target_agent_id = _required_text(target_agent_id, field="agent_id")
+        token = new_token.strip() if isinstance(new_token, str) and new_token.strip() else secrets.token_urlsafe(32)
+        if len(token) < 24:
+            raise NexusError("NX-VAL-001", "new token must be at least 24 characters")
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._require_scope(conn, actor=actor, scope="agents.token.rotate", system_id="*")
+                row = conn.execute("SELECT agent_id, role FROM agent_registry WHERE agent_id = ? AND active = 1", (target_agent_id,)).fetchone()
+                if row is None:
+                    raise NexusError("NX-NOTFOUND-001", "agent not found")
+                salt_hex, digest_hex = _derive_token_material(token)
+                timestamp = _iso(_utc_now())
+                conn.execute(
+                    "UPDATE agent_registry SET agent_token_hash = ?, agent_token_salt = ? WHERE agent_id = ?",
+                    (digest_hex, salt_hex, target_agent_id),
+                )
+                conn.execute("UPDATE agent_sessions SET status = 'revoked' WHERE agent_id = ? AND status = 'active'", (target_agent_id,))
+                conn.commit()
+                return {"ok": True, "agent_id": target_agent_id, "rotated_by": actor.agent_id, "timestamp": timestamp, "new_token": token}
+            finally:
+                conn.close()
+
     def validate_session(self, session_id: str) -> SessionContext:
         conn = self._connect()
         try:
@@ -1024,19 +1235,242 @@ class Storage:
             unique[key] = {"system_id": row["system_id"], "scope": row["scope"], "resource_pattern": row["resource_pattern"]}
         return list(unique.values())
 
-    def _has_scope(self, conn: sqlite3.Connection, *, actor: SessionContext, scope: str, system_id: str | None = None) -> bool:
+    @staticmethod
+    def _scope_resource_matches(pattern: str | None, resource: str | None) -> bool:
+        from fnmatch import fnmatch
+
+        normalized = pattern or "*"
+        if normalized == "*":
+            return True
+        if resource is None:
+            return False
+        return fnmatch(resource, normalized)
+
+    def _has_scope(self, conn: sqlite3.Connection, *, actor: SessionContext, scope: str, system_id: str | None = None, resource: str | None = None) -> bool:
         system_id = system_id or actor.default_system_id
         for grant in self._effective_scopes(conn, agent_id=actor.agent_id, role=actor.role):
             if grant["scope"] != scope:
                 continue
-            if grant["system_id"] in {"*", system_id}:
+            if grant["system_id"] in {"*", system_id} and self._scope_resource_matches(grant.get("resource_pattern"), resource):
                 return True
         return False
 
-    def _require_scope(self, conn: sqlite3.Connection, *, actor: SessionContext, scope: str, system_id: str | None = None) -> None:
-        if not self._has_scope(conn, actor=actor, scope=scope, system_id=system_id):
+    def _require_scope(self, conn: sqlite3.Connection, *, actor: SessionContext, scope: str, system_id: str | None = None, resource: str | None = None) -> None:
+        if not self._has_scope(conn, actor=actor, scope=scope, system_id=system_id, resource=resource):
             target = f" for {system_id}" if system_id else ""
             raise NexusError("NX-PERM-001", f"missing scope {scope}{target}")
+
+
+    def _append_event(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        event_type: str,
+        actor: SessionContext | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> str:
+        event_id = _random_id("EVT-2026-")
+        conn.execute(
+            """
+            INSERT INTO event_log(event_id, event_type, actor_agent_id, actor_role, target_type, target_id, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                event_type,
+                actor.agent_id if actor else None,
+                actor.role if actor else None,
+                target_type,
+                target_id,
+                json.dumps(payload or {}, ensure_ascii=True, sort_keys=True),
+                _iso(_utc_now()),
+            ),
+        )
+        return event_id
+
+    def create_scope_lease(
+        self,
+        *,
+        actor: SessionContext,
+        agent_id: str,
+        scope: str,
+        system_id: str = "*",
+        resource_pattern: str = "*",
+        request_id: str | None = None,
+        reason: str,
+        ttl_minutes: int = _SCOPE_LEASE_DEFAULT_TTL_MINUTES,
+        approved_by: str | None = None,
+    ) -> dict[str, Any]:
+        agent_id = _required_text(agent_id, field="agent_id")
+        scope = _required_text(scope, field="scope")
+        system_id = _required_text(system_id, field="system_id")
+        resource_pattern = _required_text(resource_pattern, field="resource_pattern")
+        reason = _required_text(reason, field="reason")
+        if ttl_minutes <= 0 or ttl_minutes > 24 * 60:
+            raise NexusError("NX-VAL-001", "ttl_minutes must be between 1 and 1440")
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._require_scope(conn, actor=actor, scope="scopes.manage", system_id=system_id)
+                target = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (agent_id,)).fetchone()
+                if target is None:
+                    raise NexusError("NX-NOTFOUND-001", "agent not found")
+                if approved_by:
+                    approver = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (approved_by,)).fetchone()
+                    if approver is None or approved_by == actor.agent_id:
+                        raise NexusError("NX-PRECONDITION-001", "scope lease approver must be active and distinct")
+                created = _utc_now()
+                expires = created + timedelta(minutes=ttl_minutes)
+                lease_id = _random_id("LEASE-2026-")
+                conn.execute(
+                    """
+                    INSERT INTO scope_leases(lease_id, agent_id, system_id, scope, resource_pattern, request_id, reason, granted_by, approved_by, created_at, expires_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (lease_id, agent_id, system_id, scope, resource_pattern, request_id, reason, actor.agent_id, approved_by, _iso(created), _iso(expires)),
+                )
+                self._append_event(conn, event_type="scope_lease.created", actor=actor, target_type="agent", target_id=agent_id, payload={"lease_id": lease_id, "scope": scope, "system_id": system_id, "resource_pattern": resource_pattern, "request_id": request_id})
+                conn.commit()
+                return {"ok": True, "lease_id": lease_id, "agent_id": agent_id, "scope": scope, "system_id": system_id, "resource_pattern": resource_pattern, "request_id": request_id, "expires_at": _iso(expires)}
+            finally:
+                conn.close()
+
+    def list_scope_leases(self, *, actor: SessionContext, agent_id: str | None = None, active_only: bool = True) -> dict[str, Any]:
+        conn = self._connect()
+        try:
+            self._require_scope(conn, actor=actor, scope="scopes.read", system_id=actor.default_system_id)
+            clauses = []
+            params: list[Any] = []
+            if agent_id:
+                clauses.append("agent_id = ?")
+                params.append(agent_id)
+            if active_only:
+                clauses.append("revoked_at IS NULL AND expires_at > ?")
+                params.append(_iso(_utc_now()))
+            where = "WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = conn.execute(f"SELECT * FROM scope_leases {where} ORDER BY created_at DESC LIMIT 200", params).fetchall()
+            return {"leases": [dict(row) for row in rows]}
+        finally:
+            conn.close()
+
+    def revoke_scope_lease(self, *, actor: SessionContext, lease_id: str, reason: str) -> dict[str, Any]:
+        lease_id = _required_text(lease_id, field="lease_id")
+        reason = _required_text(reason, field="reason")
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._require_scope(conn, actor=actor, scope="scopes.manage", system_id="*")
+                row = conn.execute("SELECT * FROM scope_leases WHERE lease_id = ?", (lease_id,)).fetchone()
+                if row is None:
+                    raise NexusError("NX-NOTFOUND-001", "scope lease not found")
+                timestamp = _iso(_utc_now())
+                conn.execute("UPDATE scope_leases SET revoked_at = ? WHERE lease_id = ? AND revoked_at IS NULL", (timestamp, lease_id))
+                self._append_event(conn, event_type="scope_lease.revoked", actor=actor, target_type="scope_lease", target_id=lease_id, payload={"reason": reason})
+                conn.commit()
+                return {"ok": True, "lease_id": lease_id, "revoked_at": timestamp}
+            finally:
+                conn.close()
+
+    def list_event_log(self, *, actor: SessionContext, target_type: str | None = None, target_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+        if limit <= 0 or limit > 500:
+            raise NexusError("NX-VAL-001", "limit must be between 1 and 500")
+        conn = self._connect()
+        try:
+            self._require_scope(conn, actor=actor, scope="context.read", system_id=actor.default_system_id)
+            clauses = []
+            params: list[Any] = []
+            if target_type:
+                clauses.append("target_type = ?")
+                params.append(target_type)
+            if target_id:
+                clauses.append("target_id = ?")
+                params.append(target_id)
+            where = "WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = conn.execute(f"SELECT * FROM event_log {where} ORDER BY created_at DESC LIMIT ?", (*params, limit)).fetchall()
+            events = []
+            for row in rows:
+                item = dict(row)
+                item["payload"] = json.loads(item.pop("payload_json") or "{}")
+                events.append(item)
+            return {"events": events}
+        finally:
+            conn.close()
+
+    def backup_database(self, *, actor: SessionContext, backup_path: str | None = None) -> dict[str, Any]:
+        self._require_local_db_path()
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._require_scope(conn, actor=actor, scope="scopes.manage", system_id="*")
+                target = Path(backup_path).expanduser() if backup_path else self._db_path.with_suffix(f".{_utc_now().strftime('%Y%m%d%H%M%S')}.bak.sqlite3")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                dest = sqlite3.connect(target)
+                try:
+                    conn.backup(dest)
+                finally:
+                    dest.close()
+                self._append_event(conn, event_type="database.backup", actor=actor, target_type="database", target_id=str(self._db_path), payload={"backup_path": str(target)})
+                conn.commit()
+                return {"ok": True, "backup_path": str(target)}
+            finally:
+                conn.close()
+
+    def restore_database_check(self, *, actor: SessionContext, backup_path: str) -> dict[str, Any]:
+        backup = Path(_required_text(backup_path, field="backup_path")).expanduser()
+        if not backup.exists():
+            raise NexusError("NX-NOTFOUND-001", "backup not found")
+        conn = self._connect()
+        try:
+            self._require_scope(conn, actor=actor, scope="scopes.manage", system_id="*")
+        finally:
+            conn.close()
+        test_conn = sqlite3.connect(backup)
+        try:
+            integrity = test_conn.execute("PRAGMA integrity_check").fetchone()[0]
+            migrations = [row[0] for row in test_conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()] if test_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'").fetchone() else []
+        finally:
+            test_conn.close()
+        if integrity != "ok":
+            raise NexusError("NX-PRECONDITION-001", f"backup integrity check failed: {integrity}")
+        return {"ok": True, "backup_path": str(backup), "integrity": integrity, "migrations": migrations}
+
+    def _require_local_db_path(self) -> None:
+        if not self._db_path:
+            raise NexusError("NX-INFRA-001", "database path is not configured")
+
+    def evaluate_tool_guardrail(self, *, actor: SessionContext, tool_id: str, request_id: str | None = None, side_effect_level: str | None = None, human_approved: bool = False) -> dict[str, Any]:
+        tool_id = _required_text(tool_id, field="tool_id")
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute("SELECT * FROM runtime_tools WHERE tool_id = ?", (tool_id,)).fetchone()
+                if row is None:
+                    raise NexusError("NX-NOTFOUND-001", "runtime tool not found")
+                self._require_scope(conn, actor=actor, scope=row["required_scope"], system_id=row["system_id"], resource=request_id)
+                allowed_roles = json.loads(row["allowed_roles_json"] or "[]")
+                decision = "allow"
+                reason = "allowed"
+                level = side_effect_level or row["side_effect_level"]
+                if allowed_roles and actor.role not in allowed_roles:
+                    decision, reason = "deny", "actor role is not allowed for tool"
+                elif level in {"destructive", "live_trade"} and not human_approved:
+                    decision, reason = "approval_required", "high side-effect tool requires human approval"
+                elif row["requires_human_approval"] and not human_approved:
+                    decision, reason = "approval_required", "tool requires human approval"
+                guardrail_id = _random_id("GR-2026-")
+                conn.execute(
+                    "INSERT INTO tool_guardrail_events(guardrail_id, tool_id, request_id, actor_agent_id, decision, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (guardrail_id, tool_id, request_id, actor.agent_id, decision, reason, _iso(_utc_now())),
+                )
+                self._append_event(conn, event_type="tool_guardrail.evaluated", actor=actor, target_type="runtime_tool", target_id=tool_id, payload={"decision": decision, "reason": reason, "request_id": request_id})
+                conn.commit()
+                if decision == "deny":
+                    raise NexusError("NX-PERM-001", reason)
+                return {"ok": decision == "allow", "guardrail_id": guardrail_id, "tool_id": tool_id, "decision": decision, "reason": reason}
+            finally:
+                conn.close()
 
     def list_scopes(self, *, actor: SessionContext, target_agent_id: str | None = None) -> dict[str, Any]:
         conn = self._connect()
@@ -1542,16 +1976,12 @@ class Storage:
         initial_status = "draft" if actor.role == "trading-sentinel" else "submitted"
         required_scope = "request.draft.create" if initial_status == "draft" else "request.create"
 
+        # Handoff Contract v2 deterministic identity: objective + missing_capability + goal_ref.
+        # Mutable detail fields such as impact, expected behavior, priority and criteria update
+        # the existing request instead of creating duplicates.
         dedupe_payload = {
-            "default_system_id": actor.default_system_id,
-            "submitted_by_agent_id": actor.agent_id,
             "objective": objective,
             "missing_capability": missing_capability,
-            "business_impact": business_impact,
-            "expected_behavior": expected_behavior,
-            "acceptance_criteria": normalized_criteria,
-            "risk_class": risk_class,
-            "priority": priority,
             "goal_ref": goal_ref,
         }
         dedupe_key = hashlib.sha256(
@@ -1562,6 +1992,8 @@ class Storage:
             conn = self._connect()
             try:
                 self._require_scope(conn, actor=actor, scope=required_scope, system_id=actor.default_system_id)
+                if conn.execute("SELECT 1 FROM goal_ref_aliases WHERE goal_ref = ?", (goal_ref,)).fetchone() is None:
+                    raise NexusError("NX-PRECONDITION-001", "goal_ref is not resolvable")
                 timestamp = _iso(_utc_now())
                 row = conn.execute(
                     """
@@ -1571,6 +2003,19 @@ class Storage:
                     """,
                     (dedupe_key,),
                 ).fetchone()
+                if row is None:
+                    # Compatibility with pre-v2.2 rows whose dedupe_key also included
+                    # mutable fields such as priority and acceptance criteria.
+                    row = conn.execute(
+                        """
+                        SELECT request_id, created_at, status, submitted_by_agent_id
+                        FROM requests
+                        WHERE objective = ? AND missing_capability = ? AND goal_ref = ?
+                        """,
+                        (objective, missing_capability, goal_ref),
+                    ).fetchone()
+                    if row is not None:
+                        conn.execute("UPDATE requests SET dedupe_key = ? WHERE request_id = ?", (dedupe_key, row["request_id"]))
                 updated_existing = row is not None
                 if row is None:
                     request_id = _random_id("REQ-2026-")
@@ -1675,7 +2120,7 @@ class Storage:
                 SELECT request_id, status, objective, missing_capability, business_impact, expected_behavior,
                        acceptance_criteria_json, risk_class, priority, goal_ref, submitted_by_agent_id,
                        default_system_id, domain, source_system_id, target_system_id, target_repo_id, branch,
-                       assigned_agent_id, sanitized_summary, created_at, updated_at
+                       assigned_agent_id, reviewer_agent_id, sanitized_summary, created_at, updated_at
                 FROM requests
                 {where_sql}
                 ORDER BY updated_at DESC
@@ -1696,7 +2141,7 @@ class Storage:
                 SELECT request_id, status, objective, missing_capability, business_impact, expected_behavior,
                        acceptance_criteria_json, risk_class, priority, goal_ref,
                        submitted_by_agent_id, default_system_id, domain, source_system_id, target_system_id,
-                       target_repo_id, branch, assigned_agent_id, sanitized_summary, last_reason, last_actor_agent_id,
+                       target_repo_id, branch, assigned_agent_id, reviewer_agent_id, sanitized_summary, last_reason, last_actor_agent_id,
                        last_transition_at, created_at, updated_at
                 FROM requests
                 WHERE request_id = ?
@@ -1731,39 +2176,45 @@ class Storage:
             "submitted_by_agent_id": row["submitted_by_agent_id"], "default_system_id": row["default_system_id"],
             "domain": row["domain"], "created_at": row["created_at"], "updated_at": row["updated_at"],
         }
-        for key in ("source_system_id", "target_system_id", "target_repo_id", "branch", "assigned_agent_id", "sanitized_summary"):
+        for key in ("source_system_id", "target_system_id", "target_repo_id", "branch", "assigned_agent_id", "reviewer_agent_id", "sanitized_summary"):
             if key in row.keys():
                 payload[key] = row[key]
         return payload
 
-    def transition_request(self, *, actor: SessionContext, request_id: str, to_status: str, reason: str) -> dict[str, Any]:
+    def transition_request(self, *, actor: SessionContext, request_id: str, to_status: str, reason: str, _via_work_gate: bool = False) -> dict[str, Any]:
         reason_text = _required_text(reason, field="reason")
         if to_status not in _REQUEST_STATUSES:
             raise NexusError("NX-VAL-001", "invalid request status")
         with self._lock:
             conn = self._connect()
             try:
-                row = conn.execute("SELECT status, default_system_id FROM requests WHERE request_id = ?", (request_id,)).fetchone()
+                row = conn.execute("SELECT status, default_system_id, target_system_id FROM requests WHERE request_id = ?", (request_id,)).fetchone()
                 if row is None:
                     raise NexusError("NX-NOTFOUND-001", "request not found")
                 from_status = row["status"]
+                if (
+                    not _via_work_gate
+                    and row["target_system_id"] == "software-domain"
+                    and (to_status in _WORK_MANAGED_STATUSES or from_status in _WORK_MANAGED_STATUSES)
+                ):
+                    raise NexusError("NX-PRECONDITION-001", "software work status transitions must use nexus work transition gates")
                 if to_status not in _REQUEST_TRANSITIONS.get(from_status, set()):
                     raise NexusError("NX-PRECONDITION-003", "invalid request transition")
                 # Strategists may only submit/cancel their own drafts via a limited scope; software agents use work-scoped transitions.
                 if actor.role == "trading-strategist" and from_status == "draft":
-                    self._require_scope(conn, actor=actor, scope="request.submit-draft", system_id=row["default_system_id"])
-                elif self._has_scope(conn, actor=actor, scope="request.transition", system_id=row["default_system_id"]):
+                    self._require_scope(conn, actor=actor, scope="request.submit-draft", system_id=row["default_system_id"], resource=request_id)
+                elif self._has_scope(conn, actor=actor, scope="request.transition", system_id=row["default_system_id"], resource=request_id):
                     pass
-                elif self._has_scope(conn, actor=actor, scope="work.transition", system_id="software-domain"):
+                elif self._has_scope(conn, actor=actor, scope="work.transition", system_id="software-domain", resource=request_id):
                     pass
                 elif from_status in {"accepted", "needs-planning"}:
-                    self._require_scope(conn, actor=actor, scope="work.plan", system_id="software-domain")
+                    self._require_scope(conn, actor=actor, scope="work.plan", system_id="software-domain", resource=request_id)
                 elif from_status in {"ready-to-build", "in-build", "review-failed"}:
-                    self._require_scope(conn, actor=actor, scope="work.transition.build", system_id="software-domain")
+                    self._require_scope(conn, actor=actor, scope="work.transition.build", system_id="software-domain", resource=request_id)
                 elif from_status in {"in-review", "state-update-needed"}:
-                    self._require_scope(conn, actor=actor, scope="work.transition.review", system_id="software-domain")
+                    self._require_scope(conn, actor=actor, scope="work.transition.review", system_id="software-domain", resource=request_id)
                 else:
-                    self._require_scope(conn, actor=actor, scope="work.transition", system_id="software-domain")
+                    self._require_scope(conn, actor=actor, scope="work.transition", system_id="software-domain", resource=request_id)
 
                 timestamp = _iso(_utc_now())
                 conn.execute(
@@ -1806,10 +2257,10 @@ class Storage:
                            r.github_last_synced_at, r.created_at, r.updated_at
                     FROM repositories r
                     JOIN requests h ON h.target_repo_id = r.repo_id
-                    WHERE h.assigned_agent_id = ?
+                    WHERE h.assigned_agent_id = ? OR h.reviewer_agent_id = ?
                     ORDER BY r.repo_id
                     """,
-                    (actor.agent_id,),
+                    (actor.agent_id, actor.agent_id),
                 ).fetchall()
             else:
                 self._require_scope(conn, actor=actor, scope="repos.read", system_id="software-domain")
@@ -1852,8 +2303,8 @@ class Storage:
                 if not self._has_scope(conn, actor=actor, scope="repos.read.assigned", system_id="software-domain"):
                     raise NexusError("NX-PERM-001", "missing scope repos.read")
                 assigned = conn.execute(
-                    "SELECT 1 FROM requests WHERE target_repo_id = ? AND assigned_agent_id = ? LIMIT 1",
-                    (repo_id, actor.agent_id),
+                    "SELECT 1 FROM requests WHERE target_repo_id = ? AND (assigned_agent_id = ? OR reviewer_agent_id = ?) LIMIT 1",
+                    (repo_id, actor.agent_id, actor.agent_id),
                 ).fetchone()
                 if assigned is None:
                     raise NexusError("NX-PERM-001", "repository is outside assigned work")
@@ -1870,11 +2321,13 @@ class Storage:
             "allowed_agent_roles": json.loads(row["allowed_agent_roles_json"]),
             "created_at": row["created_at"], "updated_at": row["updated_at"],
         }
-        for key in ("github_owner", "github_repo", "github_default_branch", "github_installation_id", "github_node_id", "github_html_url", "github_sync_enabled", "github_last_synced_at"):
+        for key in ("github_owner", "github_repo", "github_default_branch", "github_installation_id", "github_node_id", "github_html_url", "github_sync_enabled", "github_last_synced_at", "github_branch_protection_state", "github_codeowners_state", "github_required_checks_json"):
             if key in row.keys():
                 payload[key] = row[key]
         if "github_sync_enabled" in payload:
             payload["github_sync_enabled"] = bool(payload["github_sync_enabled"])
+        if "github_required_checks_json" in payload:
+            payload["github_required_checks"] = json.loads(payload.pop("github_required_checks_json") or "[]")
         return payload
 
     def list_work(self, *, actor: SessionContext, status_filter: str = "all", limit: int = 100) -> dict[str, Any]:
@@ -1892,13 +2345,13 @@ class Storage:
                 clauses.append("status = ?")
                 params.append(status_filter)
             if not full_read:
-                clauses.append("assigned_agent_id = ?")
-                params.append(actor.agent_id)
+                clauses.append("(assigned_agent_id = ? OR reviewer_agent_id = ?)")
+                params.extend([actor.agent_id, actor.agent_id])
             where = " AND ".join(clauses)
             rows = conn.execute(
                 f"""
                 SELECT request_id, status, priority, risk_class, objective, missing_capability,
-                       target_repo_id, assigned_agent_id, branch, sanitized_summary,
+                       target_repo_id, assigned_agent_id, reviewer_agent_id, branch, sanitized_summary,
                        implementation_context_json, implementation_context_approved_by,
                        implementation_context_approved_at, updated_at
                 FROM requests
@@ -1943,6 +2396,7 @@ class Storage:
                     "target_system_id": row["target_system_id"],
                     "target_repo_id": row["target_repo_id"],
                     "assigned_agent_id": row["assigned_agent_id"],
+                    "reviewer_agent_id": row["reviewer_agent_id"],
                     "branch": row["branch"],
                     "sanitized_summary": row["sanitized_summary"],
                     "implementation_context_approved_by": row["implementation_context_approved_by"],
@@ -1959,6 +2413,7 @@ class Storage:
                     "target_system_id": row["target_system_id"],
                     "target_repo_id": row["target_repo_id"],
                     "assigned_agent_id": row["assigned_agent_id"],
+                    "reviewer_agent_id": row["reviewer_agent_id"],
                     "branch": row["branch"],
                     "sanitized_summary": row["sanitized_summary"],
                     "implementation_context": self._implementation_context_from_row(row, require_approved=False) or {},
@@ -1990,6 +2445,7 @@ class Storage:
         repo_id: str,
         branch: str | None = None,
         assigned_agent_id: str | None = None,
+        reviewer_agent_id: str | None = None,
         sanitized_summary: str | None = None,
     ) -> dict[str, Any]:
         request_id = _required_text(request_id, field="request_id")
@@ -1998,22 +2454,36 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="work.plan", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="work.plan", system_id="software-domain", resource=request_id)
                 row = conn.execute("SELECT status FROM requests WHERE request_id = ?", (request_id,)).fetchone()
                 if row is None:
                     raise NexusError("NX-NOTFOUND-001", "work item not found")
                 if conn.execute("SELECT 1 FROM repositories WHERE repo_id = ?", (repo_id,)).fetchone() is None:
                     raise NexusError("NX-NOTFOUND-001", "repository not found")
+                if assigned_agent_id is not None:
+                    assigned_agent_id = _required_text(assigned_agent_id, field="assigned_agent_id")
+                    assigned_row = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (assigned_agent_id,)).fetchone()
+                    if assigned_row is None or assigned_row["role"] != "sw-builder":
+                        raise NexusError("NX-PRECONDITION-001", "assigned_agent_id must reference an active sw-builder")
+                if reviewer_agent_id is not None:
+                    reviewer_agent_id = _required_text(reviewer_agent_id, field="reviewer_agent_id")
+                    reviewer_row = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (reviewer_agent_id,)).fetchone()
+                    if reviewer_row is None or reviewer_row["role"] != "sw-reviewer":
+                        raise NexusError("NX-PRECONDITION-001", "reviewer_agent_id must reference an active sw-reviewer")
+                    if reviewer_agent_id == assigned_agent_id:
+                        raise NexusError("NX-PRECONDITION-001", "reviewer_agent_id must be distinct from assigned_agent_id")
                 timestamp = _iso(_utc_now())
                 conn.execute(
                     """
                     UPDATE requests
                     SET target_system_id = 'software-domain', target_repo_id = ?, branch = ?,
-                        assigned_agent_id = COALESCE(?, assigned_agent_id), sanitized_summary = COALESCE(?, sanitized_summary),
+                        assigned_agent_id = COALESCE(?, assigned_agent_id),
+                        reviewer_agent_id = COALESCE(?, reviewer_agent_id),
+                        sanitized_summary = COALESCE(?, sanitized_summary),
                         updated_at = ?
                     WHERE request_id = ?
                     """,
-                    (repo_id, branch_value, assigned_agent_id, sanitized_summary, timestamp, request_id),
+                    (repo_id, branch_value, assigned_agent_id, reviewer_agent_id, sanitized_summary, timestamp, request_id),
                 )
                 conn.commit()
                 return self.show_work(actor=actor, request_id=request_id)
@@ -2032,7 +2502,7 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="work.implementation-context.set", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="work.implementation-context.set", system_id="software-domain", resource=request_id)
                 self._authorize_work_read(conn, actor=actor, request_id=request_id)
                 timestamp = _iso(_utc_now())
                 conn.execute(
@@ -2055,7 +2525,7 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="work.plan.approve", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="work.plan.approve", system_id="software-domain", resource=request_id)
                 self._authorize_work_read(conn, actor=actor, request_id=request_id)
                 row = conn.execute(
                     """
@@ -2094,11 +2564,14 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="work.assign", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="work.assign", system_id="software-domain", resource=request_id)
                 if conn.execute("SELECT 1 FROM requests WHERE request_id = ?", (request_id,)).fetchone() is None:
                     raise NexusError("NX-NOTFOUND-001", "work item not found")
-                if conn.execute("SELECT 1 FROM agent_registry WHERE agent_id = ? AND active = 1", (agent_id,)).fetchone() is None:
+                agent_row = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (agent_id,)).fetchone()
+                if agent_row is None:
                     raise NexusError("NX-NOTFOUND-001", "agent not found")
+                if agent_row["role"] != "sw-builder":
+                    raise NexusError("NX-PRECONDITION-001", "work assignment must reference an active sw-builder")
                 timestamp = _iso(_utc_now())
                 conn.execute("UPDATE requests SET assigned_agent_id = ?, updated_at = ? WHERE request_id = ?", (agent_id, timestamp, request_id))
                 conn.commit()
@@ -2123,8 +2596,8 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="github.issue.create", system_id="software-domain")
-                self._require_scope(conn, actor=actor, scope="work.read", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="github.issue.create", system_id="software-domain", resource=request_id)
+                self._require_scope(conn, actor=actor, scope="work.read", system_id="software-domain", resource=request_id)
                 request_row = self._load_work_request(conn, request_id=request_id)
                 repo_row = self._load_request_repo(conn, request_row)
                 if not request_row["target_repo_id"] or not request_row["branch"]:
@@ -2156,7 +2629,7 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="github.issue.sync", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="github.issue.sync", system_id="software-domain", resource=request_id)
                 self._authorize_work_read(conn, actor=actor, request_id=request_id)
                 row = conn.execute("SELECT * FROM github_issues WHERE request_id = ?", (request_id,)).fetchone()
                 if row is None:
@@ -2184,7 +2657,7 @@ class Storage:
                 assert_repo_matches(ref, gh_repo)
                 pr = self._github_client_or_default().get_pull_request(ref.owner, ref.repo, ref.number)
                 timestamp = _iso(_utc_now())
-                self._upsert_github_pr(conn, request_id=request_id, repo_id=repo_row["repo_id"], owner=ref.owner, repo=ref.repo, pr=pr, timestamp=timestamp, review_state="unknown", checks_state="unknown", policy_state="unknown", changed_files=[], commits=[])
+                self._upsert_github_pr(conn, request_id=request_id, repo_id=repo_row["repo_id"], owner=ref.owner, repo=ref.repo, pr=pr, timestamp=timestamp, review_state="unknown", checks_state="unknown", policy_state="unknown", policy_checks=[{"id": "protected_paths", "state": "unknown"}, {"id": "required_checks", "state": "unknown"}, {"id": "review_state", "state": "unknown"}, {"id": "fresh_pr_sync", "state": "unknown"}], changed_files=[], commits=[])
                 self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="github_pr_linked", ref=pr.get("html_url") or url, summary=f"GitHub PR #{ref.number} linked")
                 conn.commit()
             finally:
@@ -2211,16 +2684,46 @@ class Storage:
                 commits = client.list_pull_request_commits(owner, repo, number)
                 combined_status = client.get_combined_status(owner, repo, head_sha) if head_sha else {}
                 check_runs = client.list_check_runs_for_ref(owner, repo, head_sha) if head_sha else {}
-                review_state = derive_review_state(reviews)
+                latest_commit_at = None
+                for item in commits:
+                    commit_info = item.get("commit") or {}
+                    committer = commit_info.get("committer") or {}
+                    authored = commit_info.get("author") or {}
+                    candidate = committer.get("date") or authored.get("date") or item.get("updated_at") or item.get("created_at")
+                    if candidate and (latest_commit_at is None or candidate > latest_commit_at):
+                        latest_commit_at = candidate
+                review_state = derive_review_state(reviews, latest_commit_at=latest_commit_at)
                 checks_state = derive_checks_state(check_runs, combined_status)
                 changed_files = [item.get("filename") for item in files if item.get("filename")]
                 context = self._implementation_context_from_row(request_row, require_approved=False) or {}
-                policy = evaluate_changed_files_policy(changed_files, context.get("do_not_touch") or [])
+                policy = evaluate_changed_files_policy(files, context.get("do_not_touch") or [])
+                repo_policy = conn.execute("SELECT github_branch_protection_state, github_codeowners_state, github_required_checks_json FROM repositories WHERE repo_id = ?", (pr_row["repo_id"],)).fetchone()
+                branch_state = repo_policy["github_branch_protection_state"] if repo_policy else "unknown"
+                codeowners_state = repo_policy["github_codeowners_state"] if repo_policy else "unknown"
+                required_contexts = json.loads((repo_policy["github_required_checks_json"] if repo_policy else "[]") or "[]")
+                # Backward-compatible MVP default: when repository policy has not been synced yet,
+                # status checks/reviews still pass as before, while the explicit check rows make
+                # missing repo policy visible. A repository sync upgrades these from legacy_ok to
+                # enforced ok/missing/unknown states.
+                branch_check_state = "legacy_ok" if branch_state == "unknown" else ("ok" if branch_state == "enabled" else branch_state)
+                codeowners_check_state = "legacy_ok" if codeowners_state == "unknown" else ("ok" if codeowners_state == "present" else codeowners_state)
+                required_checks_state = "ok" if checks_state == "passing" and (required_contexts or branch_check_state in {"ok", "legacy_ok"}) else (checks_state if checks_state != "passing" else "unknown")
+                policy_checks = [
+                    {"id": "protected_paths", "state": "ok" if policy["policy_state"] == "ok" else "failed", "details": policy.get("violations", [])},
+                    {"id": "required_checks", "state": required_checks_state, "details": required_contexts},
+                    {"id": "review_state", "state": "ok" if review_state == "approved" else review_state},
+                    {"id": "fresh_pr_sync", "state": "ok", "details": timestamp if 'timestamp' in locals() else None},
+                    {"id": "branch_protection", "state": branch_check_state},
+                    {"id": "codeowners", "state": codeowners_check_state},
+                ]
+                if any(item["state"] not in {"ok", "legacy_ok"} for item in policy_checks):
+                    policy["policy_state"] = "violated"
                 commit_payload = [
                     {"sha": item.get("sha"), "html_url": item.get("html_url")} for item in commits
                 ]
                 timestamp = _iso(_utc_now())
-                self._upsert_github_pr(conn, request_id=request_id, repo_id=pr_row["repo_id"], owner=owner, repo=repo, pr=pr, timestamp=timestamp, review_state=review_state, checks_state=checks_state, policy_state=policy["policy_state"], changed_files=changed_files, commits=commit_payload)
+                policy_checks[3]["details"] = timestamp
+                self._upsert_github_pr(conn, request_id=request_id, repo_id=pr_row["repo_id"], owner=owner, repo=repo, pr=pr, timestamp=timestamp, review_state=review_state, checks_state=checks_state, policy_state=policy["policy_state"], policy_checks=policy_checks, changed_files=changed_files, commits=commit_payload)
                 self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="github_pr_sync", ref=pr.get("html_url"), summary=f"GitHub PR #{number} synced")
                 self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="github_reviews", ref=pr.get("html_url"), summary=f"GitHub review state: {review_state}")
                 self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="github_checks", ref=pr.get("html_url"), summary=f"GitHub checks state: {checks_state}")
@@ -2265,43 +2768,95 @@ class Storage:
     def record_github_event(self, *, delivery_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         delivery_id = _required_text(delivery_id, field="delivery_id")
         event_type = _required_text(event_type, field="event_type")
-        action = payload.get("action") if isinstance(payload.get("action"), str) else None
-        repository = payload.get("repository") if isinstance(payload.get("repository"), dict) else {}
-        owner = ((repository.get("owner") or {}) if isinstance(repository.get("owner"), dict) else {}).get("login")
-        repo = repository.get("name")
-        timestamp = _iso(_utc_now())
+        received_at = _iso(_utc_now())
+        event_id = ""
         with self._lock:
             conn = self._connect()
             try:
                 existing = conn.execute("SELECT * FROM github_events WHERE delivery_id = ?", (delivery_id,)).fetchone()
                 if existing:
                     return {"ok": True, "event_id": existing["event_id"], "delivery_id": delivery_id, "processing_status": existing["processing_status"], "duplicate": True}
-                request_id = None
-                repo_id = None
-                if owner and repo:
-                    repo_row = conn.execute("SELECT repo_id FROM repositories WHERE github_owner = ? AND github_repo = ?", (owner, repo)).fetchone()
-                    repo_id = repo_row["repo_id"] if repo_row else None
-                    issue = payload.get("issue") if isinstance(payload.get("issue"), dict) else None
-                    pr = payload.get("pull_request") if isinstance(payload.get("pull_request"), dict) else None
-                    number = (pr or issue or {}).get("number") if (pr or issue) else None
-                    if isinstance(number, int):
-                        table = "github_pull_requests" if pr else "github_issues"
-                        column = "pr_number" if pr else "issue_number"
-                        linked = conn.execute(f"SELECT request_id FROM {table} WHERE github_owner = ? AND github_repo = ? AND {column} = ?", (owner, repo, number)).fetchone()
-                        request_id = linked["request_id"] if linked else None
+                target = event_target_from_payload(conn, payload)
                 event_id = _random_id("GH-EVT-2026-")
+                initial_status = "queued" if target.request_id else "ignored"
+                processed_at = None if target.request_id else received_at
                 conn.execute(
                     """
-                    INSERT INTO github_events(event_id, delivery_id, event_type, action, request_id, repo_id, github_owner, github_repo, payload_json, received_at, processing_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received')
+                    INSERT INTO github_events(event_id, delivery_id, event_type, action, request_id, repo_id, github_owner, github_repo, payload_json, received_at, processed_at, processing_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (event_id, delivery_id, event_type, action, request_id, repo_id, owner, repo, json.dumps(payload, ensure_ascii=True, sort_keys=True), timestamp),
+                    (event_id, delivery_id, event_type, target.action, target.request_id, target.repo_id, target.owner, target.repo, encode_payload(payload), received_at, processed_at, initial_status),
                 )
-                if request_id:
+                if target.request_id:
                     actor = SessionContext(session_id="webhook", agent_id="github-webhook", role="nexus", default_system_id="software-domain", domain="Software")
-                    self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="github_webhook", ref=None, summary=f"GitHub webhook received: {event_type}/{action or 'unknown'}")
+                    self._insert_work_evidence(conn, actor=actor, request_id=target.request_id, kind="github_webhook_queued", ref=None, summary=f"GitHub webhook queued: {event_type}/{target.action or 'unknown'}")
                 conn.commit()
-                return {"ok": True, "event_id": event_id, "delivery_id": delivery_id, "event_type": event_type, "request_id": request_id, "repo_id": repo_id, "processing_status": "received"}
+            finally:
+                conn.close()
+
+        return {
+            "ok": True,
+            "event_id": event_id,
+            "delivery_id": delivery_id,
+            "event_type": event_type,
+            "request_id": target.request_id,
+            "repo_id": target.repo_id,
+            "processing_status": "queued" if target.request_id else "ignored",
+        }
+
+    def process_queued_github_events(self, *, actor: SessionContext | None = None, limit: int = 25) -> dict[str, Any]:
+        """Process queued/dead-letter GitHub webhooks outside the HTTP request path."""
+        if limit <= 0 or limit > 100:
+            raise NexusError("NX-VAL-001", "limit must be between 1 and 100")
+        actor = actor or SessionContext(session_id="webhook-worker", agent_id="github-webhook", role="nexus", default_system_id="software-domain", domain="Software")
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT event_id, request_id FROM github_events
+                    WHERE processing_status IN ('queued', 'dead_letter') AND request_id IS NOT NULL
+                    ORDER BY received_at ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            finally:
+                conn.close()
+
+        processed: list[str] = []
+        dead_letter: list[dict[str, str]] = []
+        for row in rows:
+            event_id = row["event_id"]
+            request_id = row["request_id"]
+            try:
+                self.sync_github(actor=actor, request_id=request_id)
+            except Exception as exc:  # keep worker durable; expose failure via dead-letter status.
+                error_code = getattr(exc, "code", "NX-INFRA-002")
+                error_message = getattr(exc, "message", str(exc))
+                self._mark_github_event(event_id=event_id, status="dead_letter", error_message=f"{error_code}: {error_message}")
+                alert_conn = self._connect()
+                try:
+                    self._insert_github_alert(alert_conn, kind="webhook_dead_letter", severity="critical", request_id=request_id, event_id=event_id, message=f"{error_code}: {error_message}")
+                    alert_conn.commit()
+                finally:
+                    alert_conn.close()
+                dead_letter.append({"event_id": event_id, "error_code": error_code, "error_message": error_message})
+                continue
+            self._mark_github_event(event_id=event_id, status="processed", error_message=None)
+            processed.append(event_id)
+        return {"ok": True, "processed": processed, "dead_letter": dead_letter, "remaining": max(0, len(rows) - len(processed) - len(dead_letter))}
+
+    def _mark_github_event(self, *, event_id: str, status: str, error_message: str | None) -> None:
+        processed_at = _iso(_utc_now())
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    "UPDATE github_events SET processed_at = ?, processing_status = ?, error_message = ? WHERE event_id = ?",
+                    (processed_at, status, error_message, event_id),
+                )
+                conn.commit()
             finally:
                 conn.close()
 
@@ -2332,20 +2887,71 @@ class Storage:
                 timestamp = _iso(_utc_now())
                 for row in rows:
                     repo_data = self._github_client_or_default().get_repo(row["github_owner"], row["github_repo"])
+                    branch_state = "unknown"
+                    codeowners_state = "unknown"
+                    required_checks: list[str] = []
+                    client = self._github_client_or_default()
+                    if hasattr(client, "get_branch_protection"):
+                        try:
+                            protection = client.get_branch_protection(row["github_owner"], row["github_repo"], repo_data.get("default_branch") or row["github_default_branch"] or row["default_branch"])
+                            branch_state = "enabled" if protection else "disabled"
+                            contexts = ((protection or {}).get("required_status_checks") or {}).get("contexts") or []
+                            checks = ((protection or {}).get("required_status_checks") or {}).get("checks") or []
+                            required_checks = [str(item) for item in contexts] + [str(item.get("context") or item.get("name")) for item in checks if isinstance(item, dict) and (item.get("context") or item.get("name"))]
+                        except NexusError as exc:
+                            branch_state = "missing" if exc.code == "NX-GH-NOT-FOUND" else "unknown"
+                    if hasattr(client, "get_codeowners"):
+                        try:
+                            codeowners_state = "present" if client.get_codeowners(row["github_owner"], row["github_repo"]) else "missing"
+                        except NexusError as exc:
+                            codeowners_state = "missing" if exc.code == "NX-GH-NOT-FOUND" else "unknown"
                     conn.execute(
                         """
                         UPDATE repositories
                         SET github_default_branch = COALESCE(?, github_default_branch), github_node_id = COALESCE(?, github_node_id),
-                            github_html_url = COALESCE(?, github_html_url), github_last_synced_at = ?, updated_at = ?
+                            github_html_url = COALESCE(?, github_html_url), github_last_synced_at = ?,
+                            github_branch_protection_state = ?, github_codeowners_state = ?, github_required_checks_json = ?, updated_at = ?
                         WHERE repo_id = ?
                         """,
-                        (repo_data.get("default_branch"), repo_data.get("node_id"), repo_data.get("html_url"), timestamp, timestamp, row["repo_id"]),
+                        (repo_data.get("default_branch"), repo_data.get("node_id"), repo_data.get("html_url"), timestamp, branch_state, codeowners_state, json.dumps(sorted(set(required_checks)), ensure_ascii=True), timestamp, row["repo_id"]),
                     )
                     synced.append({"repo_id": row["repo_id"], "github_owner": row["github_owner"], "github_repo": row["github_repo"]})
                 conn.commit()
                 return {"ok": True, "repositories": synced, "timestamp": timestamp}
             finally:
                 conn.close()
+
+    def list_github_alerts(self, *, actor: SessionContext, unresolved_only: bool = True, limit: int = 50) -> dict[str, Any]:
+        if limit <= 0 or limit > 200:
+            raise NexusError("NX-VAL-001", "limit must be between 1 and 200")
+        conn = self._connect()
+        try:
+            self._require_scope(conn, actor=actor, scope="github.status.read", system_id="software-domain")
+            where = "WHERE resolved_at IS NULL" if unresolved_only else ""
+            rows = conn.execute(
+                f"""
+                SELECT alert_id, kind, severity, request_id, event_id, message, created_at, resolved_at
+                FROM github_alerts
+                {where}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return {"alerts": [dict(row) for row in rows]}
+        finally:
+            conn.close()
+
+    def _insert_github_alert(self, conn: sqlite3.Connection, *, kind: str, severity: str, message: str, request_id: str | None = None, event_id: str | None = None) -> str:
+        alert_id = _random_id("GH-ALERT-2026-")
+        conn.execute(
+            """
+            INSERT INTO github_alerts(alert_id, kind, severity, request_id, event_id, message, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (alert_id, kind, severity, request_id, event_id, message, _iso(_utc_now())),
+        )
+        return alert_id
 
     def submit_work_evidence(self, *, actor: SessionContext, request_id: str, kind: str, ref: str | None, summary: str) -> dict[str, Any]:
         request_id = _required_text(request_id, field="request_id")
@@ -2354,7 +2960,7 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                if not self._has_scope(conn, actor=actor, scope="work.evidence.create", system_id="software-domain") and not self._has_scope(conn, actor=actor, scope="work.transition", system_id="software-domain"):
+                if not self._has_scope(conn, actor=actor, scope="work.evidence.create", system_id="software-domain", resource=request_id) and not self._has_scope(conn, actor=actor, scope="work.transition", system_id="software-domain", resource=request_id):
                     raise NexusError("NX-PERM-001", "missing scope work.evidence.create")
                 self._authorize_work_read(conn, actor=actor, request_id=request_id)
                 evidence_id = _random_id("WEV-2026-")
@@ -2380,8 +2986,15 @@ class Storage:
         with self._lock:
             conn = self._connect()
             try:
-                self._require_scope(conn, actor=actor, scope="reviews.submit", system_id="software-domain")
+                self._require_scope(conn, actor=actor, scope="reviews.submit", system_id="software-domain", resource=request_id)
                 self._authorize_work_read(conn, actor=actor, request_id=request_id)
+                work_row = conn.execute("SELECT assigned_agent_id, reviewer_agent_id FROM requests WHERE request_id = ?", (request_id,)).fetchone()
+                if work_row is None:
+                    raise NexusError("NX-NOTFOUND-001", "work item not found")
+                if work_row["assigned_agent_id"] == actor.agent_id:
+                    raise NexusError("NX-PRECONDITION-001", "reviewer must be distinct from assigned builder")
+                if work_row["reviewer_agent_id"] != actor.agent_id and actor.role == "sw-reviewer":
+                    raise NexusError("NX-PERM-001", "work item is outside reviewer scope")
                 review_id = _random_id("REV-2026-")
                 timestamp = _iso(_utc_now())
                 conn.execute(
@@ -2405,7 +3018,7 @@ class Storage:
         finally:
             conn.close()
 
-    def transition_work(self, *, actor: SessionContext, request_id: str, to_status: str, reason: str, override: bool = False) -> dict[str, Any]:
+    def transition_work(self, *, actor: SessionContext, request_id: str, to_status: str, reason: str, override: bool = False, approved_by: str | None = None) -> dict[str, Any]:
         request_id = _required_text(request_id, field="request_id")
         reason_text = _required_text(reason, field="reason")
         if override:
@@ -2421,6 +3034,19 @@ class Storage:
                     from_status = row["status"]
                     if to_status not in _REQUEST_STATUSES:
                         raise NexusError("NX-VAL-001", "invalid request status")
+                    allowed_override_targets = set(_REQUEST_TRANSITIONS.get(from_status, set())) | {"cancelled"}
+                    if to_status not in allowed_override_targets:
+                        raise NexusError("NX-PRECONDITION-001", "manual override cannot skip lifecycle gates")
+                    if len(reason_text) < 20:
+                        raise NexusError("NX-PRECONDITION-001", "manual override reason must include durable evidence context")
+                    approver_id = _required_text(approved_by, field="approved_by") if approved_by else ""
+                    if not approver_id:
+                        raise NexusError("NX-PRECONDITION-001", "manual override requires --approved-by second approver")
+                    if approver_id == actor.agent_id:
+                        raise NexusError("NX-PRECONDITION-001", "manual override approver must be distinct from actor")
+                    approver = conn.execute("SELECT role FROM agent_registry WHERE agent_id = ? AND active = 1", (approver_id,)).fetchone()
+                    if approver is None or approver["role"] not in {"sw-techlead", "nexus"}:
+                        raise NexusError("NX-PRECONDITION-001", "manual override approver must be an active sw-techlead or nexus")
                     timestamp = _iso(_utc_now())
                     conn.execute(
                         "UPDATE requests SET status = ?, last_reason = ?, last_actor_agent_id = ?, last_transition_at = ?, updated_at = ? WHERE request_id = ?",
@@ -2434,9 +3060,10 @@ class Storage:
                         """,
                         (event_id, request_id, from_status, to_status, reason_text, actor.agent_id, actor.role, actor.default_system_id, actor.domain, timestamp),
                     )
-                    self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="manual_override", ref=None, summary=reason_text)
+                    self._insert_work_evidence(conn, actor=actor, request_id=request_id, kind="manual_override", ref=None, summary=f"{reason_text} | approved_by={approver_id}")
+                    self._insert_github_alert(conn, kind="manual_override", severity="critical", request_id=request_id, message=f"Manual override {from_status}->{to_status} by {actor.agent_id}, approved by {approver_id}")
                     conn.commit()
-                    return {"ok": True, "request_id": request_id, "from_status": from_status, "to_status": to_status, "reason": reason_text, "event_id": event_id, "override": True, "timestamp": timestamp}
+                    return {"ok": True, "request_id": request_id, "from_status": from_status, "to_status": to_status, "reason": reason_text, "event_id": event_id, "override": True, "approved_by": approver_id, "timestamp": timestamp}
                 finally:
                     conn.close()
 
@@ -2455,16 +3082,25 @@ class Storage:
                 if conn.execute("SELECT 1 FROM github_pull_requests WHERE request_id = ?", (request_id,)).fetchone() is None:
                     raise NexusError("NX-PRECONDITION-001", "in-review requires linked GitHub PR")
             if to_status == "approved":
-                pr = conn.execute("SELECT review_state, checks_state, policy_state FROM github_pull_requests WHERE request_id = ?", (request_id,)).fetchone()
+                self._require_fresh_github_pr_sync(actor=actor, request_id=request_id, target_status="approved")
+                pr = conn.execute("SELECT state, draft, head_sha, review_state, checks_state, policy_state FROM github_pull_requests WHERE request_id = ?", (request_id,)).fetchone()
                 if pr is None:
                     raise NexusError("NX-PRECONDITION-001", "approved requires linked GitHub PR")
+                if pr["state"] != "open":
+                    raise NexusError("NX-PRECONDITION-001", "approved requires an open GitHub PR")
+                if pr["draft"]:
+                    raise NexusError("NX-PRECONDITION-001", "approved requires a non-draft GitHub PR")
+                if not pr["head_sha"]:
+                    raise NexusError("NX-PRECONDITION-001", "approved requires synced GitHub PR head SHA")
                 if pr["review_state"] != "approved":
-                    raise NexusError("NX-PRECONDITION-001", "approved requires GitHub review approval")
+                    raise NexusError("NX-PRECONDITION-001", "approved requires current GitHub review approval")
                 if pr["checks_state"] != "passing":
                     raise NexusError("NX-PRECONDITION-001", "approved requires passing GitHub checks")
                 if pr["policy_state"] != "ok":
-                    raise NexusError("NX-PRECONDITION-001", "approved requires clean do-not-touch policy")
+                    raise NexusError("NX-PRECONDITION-001", "approved requires clean GitHub policy gates")
+                self._require_clean_policy_checks(conn, request_id=request_id, target_status="approved")
             if to_status == "done":
+                self._require_fresh_github_pr_sync(actor=actor, request_id=request_id, target_status="done")
                 pr = conn.execute("SELECT merged, merge_commit_sha, policy_state FROM github_pull_requests WHERE request_id = ?", (request_id,)).fetchone()
                 if pr is None:
                     raise NexusError("NX-PRECONDITION-001", "done requires linked GitHub PR")
@@ -2476,18 +3112,65 @@ class Storage:
                 if "github_checks" not in kinds:
                     raise NexusError("NX-PRECONDITION-001", "done requires GitHub checks evidence")
                 if pr["policy_state"] != "ok":
-                    raise NexusError("NX-PRECONDITION-001", "done requires clean do-not-touch policy")
+                    raise NexusError("NX-PRECONDITION-001", "done requires clean GitHub policy gates")
+                self._require_clean_policy_checks(conn, request_id=request_id, target_status="done")
         finally:
             conn.close()
-        return self.transition_request(actor=actor, request_id=request_id, to_status=to_status, reason=reason_text)
+        return self.transition_request(actor=actor, request_id=request_id, to_status=to_status, reason=reason_text, _via_work_gate=True)
+
+    def _require_clean_policy_checks(self, conn: sqlite3.Connection, *, request_id: str, target_status: str) -> None:
+        row = conn.execute("SELECT policy_checks_json FROM github_pull_requests WHERE request_id = ?", (request_id,)).fetchone()
+        if row is None:
+            raise NexusError("NX-PRECONDITION-001", f"{target_status} requires linked GitHub PR")
+        checks = json.loads(row["policy_checks_json"] or "[]")
+        by_id = {str(item.get("id")): str(item.get("state")) for item in checks if isinstance(item, dict)}
+        missing = sorted(_GITHUB_REQUIRED_POLICY_CHECKS - set(by_id))
+        failing = sorted(check_id for check_id in _GITHUB_REQUIRED_POLICY_CHECKS if by_id.get(check_id) not in {"ok", "legacy_ok"})
+        if missing or failing:
+            raise NexusError("NX-PRECONDITION-001", f"{target_status} requires clean GitHub policy checks; missing={missing}, failing={failing}")
+
+    def _require_fresh_github_pr_sync(self, *, actor: SessionContext, request_id: str, target_status: str) -> None:
+        """Ensure lifecycle-closing gates use a recently synced GitHub PR snapshot.
+
+        Nexus remains the lifecycle source of truth, but GitHub is the source of
+        truth for PR head SHA, reviews, checks, merge state, and policy input.
+        A missed webhook or stale local row must not allow approved/done to pass.
+        """
+        conn = self._connect()
+        try:
+            self._authorize_work_read(conn, actor=actor, request_id=request_id)
+            pr = conn.execute(
+                "SELECT last_synced_at FROM github_pull_requests WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if pr is None:
+                raise NexusError("NX-PRECONDITION-001", f"{target_status} requires linked GitHub PR")
+            last_synced_at = pr["last_synced_at"]
+            if not last_synced_at:
+                raise NexusError("NX-PRECONDITION-001", f"{target_status} requires fresh GitHub PR sync")
+            try:
+                synced_at = _parse_iso(last_synced_at)
+            except ValueError as exc:
+                raise NexusError("NX-PRECONDITION-001", f"{target_status} requires valid GitHub PR sync timestamp") from exc
+            if _utc_now() - synced_at > _GITHUB_PR_SYNC_MAX_AGE:
+                with self._lock:
+                    alert_conn = self._connect()
+                    try:
+                        self._insert_github_alert(alert_conn, kind="stale_pr_sync", severity="warning", request_id=request_id, message=f"{target_status} blocked by stale GitHub PR sync")
+                        alert_conn.commit()
+                    finally:
+                        alert_conn.close()
+                raise NexusError("NX-PRECONDITION-001", f"{target_status} requires fresh GitHub PR sync")
+        finally:
+            conn.close()
 
     def _authorize_work_read(self, conn: sqlite3.Connection, *, actor: SessionContext, request_id: str) -> None:
-        row = conn.execute("SELECT assigned_agent_id, target_system_id FROM requests WHERE request_id = ?", (request_id,)).fetchone()
+        row = conn.execute("SELECT assigned_agent_id, reviewer_agent_id, target_system_id FROM requests WHERE request_id = ?", (request_id,)).fetchone()
         if row is None:
             raise NexusError("NX-NOTFOUND-001", "work item not found")
-        if self._has_scope(conn, actor=actor, scope="work.read", system_id="software-domain"):
+        if self._has_scope(conn, actor=actor, scope="work.read", system_id="software-domain", resource=request_id):
             return
-        if self._has_scope(conn, actor=actor, scope="work.read.assigned", system_id="software-domain") and row["assigned_agent_id"] == actor.agent_id:
+        if self._has_scope(conn, actor=actor, scope="work.read.assigned", system_id="software-domain", resource=request_id) and actor.agent_id in {row["assigned_agent_id"], row["reviewer_agent_id"]}:
             return
         raise NexusError("NX-PERM-001", "work item is outside actor scope")
 
@@ -2547,9 +3230,9 @@ class Storage:
         )
 
     def _require_github_assigned_or_full(self, conn: sqlite3.Connection, *, actor: SessionContext, request_id: str, full_scope: str, assigned_scope: str) -> None:
-        if self._has_scope(conn, actor=actor, scope=full_scope, system_id="software-domain"):
+        if self._has_scope(conn, actor=actor, scope=full_scope, system_id="software-domain", resource=request_id):
             return
-        if self._has_scope(conn, actor=actor, scope=assigned_scope, system_id="software-domain"):
+        if self._has_scope(conn, actor=actor, scope=assigned_scope, system_id="software-domain", resource=request_id):
             self._authorize_work_read(conn, actor=actor, request_id=request_id)
             return
         raise NexusError("NX-PERM-001", f"missing scope {full_scope}")
@@ -2592,6 +3275,7 @@ class Storage:
         review_state: str,
         checks_state: str,
         policy_state: str,
+        policy_checks: list[dict[str, Any]] | None = None,
         changed_files: list[str],
         commits: list[dict[str, Any]],
     ) -> None:
@@ -2602,8 +3286,8 @@ class Storage:
             INSERT INTO github_pull_requests(
                 request_id, repo_id, github_owner, github_repo, pr_number, pr_node_id, title, state, draft, merged,
                 merge_commit_sha, head_ref, head_sha, base_ref, html_url, api_url, review_state, checks_state,
-                policy_state, changed_files_json, commits_json, created_at, updated_at, merged_at, last_synced_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                policy_state, policy_checks_json, changed_files_json, commits_json, created_at, updated_at, merged_at, last_synced_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(request_id) DO UPDATE SET
                 repo_id=excluded.repo_id, github_owner=excluded.github_owner, github_repo=excluded.github_repo,
                 pr_number=excluded.pr_number, pr_node_id=excluded.pr_node_id, title=excluded.title,
@@ -2611,7 +3295,7 @@ class Storage:
                 head_ref=excluded.head_ref, head_sha=excluded.head_sha, base_ref=excluded.base_ref,
                 html_url=excluded.html_url, api_url=excluded.api_url, review_state=excluded.review_state,
                 checks_state=excluded.checks_state, policy_state=excluded.policy_state,
-                changed_files_json=excluded.changed_files_json, commits_json=excluded.commits_json,
+                policy_checks_json=excluded.policy_checks_json, changed_files_json=excluded.changed_files_json, commits_json=excluded.commits_json,
                 created_at=excluded.created_at, updated_at=excluded.updated_at, merged_at=excluded.merged_at,
                 last_synced_at=excluded.last_synced_at
             """,
@@ -2620,7 +3304,7 @@ class Storage:
                 pr.get("state") or "unknown", 1 if pr.get("draft") else 0, 1 if pr.get("merged") else 0,
                 pr.get("merge_commit_sha"), head.get("ref") or pr.get("head_ref"), head.get("sha") or pr.get("head_sha"),
                 base.get("ref") or pr.get("base_ref"), pr.get("html_url") or "", pr.get("url"),
-                review_state, checks_state, policy_state, json.dumps(changed_files, ensure_ascii=True),
+                review_state, checks_state, policy_state, json.dumps(policy_checks or [], ensure_ascii=True), json.dumps(changed_files, ensure_ascii=True),
                 json.dumps(commits, ensure_ascii=True), pr.get("created_at") or timestamp, pr.get("updated_at") or timestamp,
                 pr.get("merged_at"), timestamp,
             ),
@@ -2648,6 +3332,7 @@ class Storage:
             "review_state": row["review_state"],
             "checks_state": row["checks_state"],
             "policy_state": row["policy_state"],
+            "policy_checks": json.loads(row["policy_checks_json"] or "[]") if "policy_checks_json" in row.keys() else [],
             "url": row["html_url"],
         }
         if include_changed_files:
@@ -2682,7 +3367,7 @@ class Storage:
             "request_id": row["request_id"], "status": row["status"], "priority": row["priority"],
             "risk_class": row["risk_class"], "objective": row["objective"],
             "task": row["objective"], "missing_capability": row["missing_capability"], "target_repo_id": row["target_repo_id"],
-            "assigned_agent_id": row["assigned_agent_id"], "branch": row["branch"],
+            "assigned_agent_id": row["assigned_agent_id"], "reviewer_agent_id": row["reviewer_agent_id"] if "reviewer_agent_id" in row.keys() else None, "branch": row["branch"],
             "sanitized_summary": row["sanitized_summary"],
             "implementation_context_approved_by": row["implementation_context_approved_by"] if "implementation_context_approved_by" in row.keys() else None,
             "implementation_context_approved_at": row["implementation_context_approved_at"] if "implementation_context_approved_at" in row.keys() else None,

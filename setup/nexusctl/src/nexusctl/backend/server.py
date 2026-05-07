@@ -33,10 +33,38 @@ class RunningServer:
     _server: ThreadingHTTPServer
     _thread: threading.Thread
 
-    def stop(self) -> None:
-        self._server.shutdown()
-        self._thread.join(timeout=5)
-        self._server.server_close()
+    def stop(self, *, timeout_seconds: float = 2.0) -> None:
+        """Stop the test/development server without hiding leaked threads.
+
+        ThreadingHTTPServer.shutdown() is normally quick, but a stuck handler or
+        interpreter edge case can otherwise make pytest hang after all assertions
+        have passed. Run shutdown itself behind a bounded join, always close the
+        listening socket, and fail loudly if either shutdown or serve_forever does
+        not terminate in time. Handler threads are daemonized by start_server and
+        must not block process exit.
+        """
+        shutdown_error: list[BaseException] = []
+
+        def _shutdown() -> None:
+            try:
+                self._server.shutdown()
+            except BaseException as exc:  # pragma: no cover - defensive teardown path
+                shutdown_error.append(exc)
+
+        shutdown_thread = threading.Thread(target=_shutdown, name="nexusctl-server-shutdown", daemon=True)
+        shutdown_thread.start()
+        try:
+            shutdown_thread.join(timeout=timeout_seconds)
+            if shutdown_thread.is_alive():
+                raise RuntimeError("nexusctl test server shutdown did not return")
+            if shutdown_error:
+                raise RuntimeError("nexusctl test server shutdown failed") from shutdown_error[0]
+
+            self._thread.join(timeout=timeout_seconds)
+            if self._thread.is_alive():
+                raise RuntimeError("nexusctl test server did not stop cleanly")
+        finally:
+            self._server.server_close()
 
 
 _MAX_JSON_BODY_BYTES = 64 * 1024
@@ -91,12 +119,17 @@ def start_server(config: BackendConfig) -> RunningServer:
 
 def _make_handler(storage: Storage):
     class Handler(BaseHTTPRequestHandler):
+        # Keep HTTP/1.0 semantics for the simple embedded server and explicitly
+        # close every response. This prevents urllib clients from leaving idle
+        # keep-alive sockets around in integration tests.
+        protocol_version = "HTTP/1.0"
+
         def log_message(self, fmt: str, *args: Any) -> None:  # pragma: no cover
             return
 
         def do_POST(self) -> None:  # noqa: N802
             try:
-                payload = self._read_json()
+                raw_body, payload = self._read_json_with_raw()
                 path = urlparse(self.path).path
 
                 if path == "/v1/nexus/auth":
@@ -139,6 +172,56 @@ def _make_handler(storage: Storage):
                         raise NexusError("NX-VAL-001", "invalid goal status payload")
                     result = storage.update_goal_status(actor=session, goal_id=goal_id, to_status=to_status, reason=reason)
                     self._send_json(200, result)
+                    return
+
+
+                if path == "/v1/nexus/scopes/leases":
+                    session = self._require_session()
+                    agent_id = payload.get("agent_id")
+                    scope = payload.get("scope")
+                    reason = payload.get("reason")
+                    ttl = payload.get("ttl_minutes", 120)
+                    if not isinstance(agent_id, str) or not isinstance(scope, str) or not isinstance(reason, str) or not isinstance(ttl, int):
+                        raise NexusError("NX-VAL-001", "invalid scope lease payload")
+                    self._send_json(200, storage.create_scope_lease(
+                        actor=session, agent_id=agent_id, scope=scope, system_id=payload.get("system_id", "*"),
+                        resource_pattern=payload.get("resource_pattern", "*"), request_id=payload.get("request_id"),
+                        reason=reason, ttl_minutes=ttl, approved_by=payload.get("approved_by"),
+                    ))
+                    return
+
+                if path.startswith("/v1/nexus/scopes/leases/") and path.endswith("/revoke"):
+                    session = self._require_session()
+                    lease_id = path.split("/")[5]
+                    reason = payload.get("reason")
+                    if not isinstance(reason, str):
+                        raise NexusError("NX-VAL-001", "invalid revoke payload")
+                    self._send_json(200, storage.revoke_scope_lease(actor=session, lease_id=lease_id, reason=reason))
+                    return
+
+                if path == "/v1/nexus/db/backup":
+                    session = self._require_session()
+                    backup_path = payload.get("backup_path")
+                    if backup_path is not None and not isinstance(backup_path, str):
+                        raise NexusError("NX-VAL-001", "invalid backup path")
+                    self._send_json(200, storage.backup_database(actor=session, backup_path=backup_path))
+                    return
+
+                if path == "/v1/nexus/db/restore-check":
+                    session = self._require_session()
+                    backup_path = payload.get("backup_path")
+                    if not isinstance(backup_path, str):
+                        raise NexusError("NX-VAL-001", "invalid backup path")
+                    self._send_json(200, storage.restore_database_check(actor=session, backup_path=backup_path))
+                    return
+
+                if path.startswith("/v1/nexus/runtime-tools/") and path.endswith("/guardrail"):
+                    session = self._require_session()
+                    tool_id = path.split("/")[4]
+                    self._send_json(200, storage.evaluate_tool_guardrail(
+                        actor=session, tool_id=tool_id, request_id=payload.get("request_id"),
+                        side_effect_level=payload.get("side_effect_level"), human_approved=bool(payload.get("human_approved", False)),
+                    ))
                     return
 
                 if path.startswith("/v1/nexus/capabilities/") and path.endswith("/status"):
@@ -236,16 +319,31 @@ def _make_handler(storage: Storage):
                     self._send_json(200, storage.sync_github_repositories(actor=session))
                     return
 
+                if path == "/v1/nexus/agents/rotate-token":
+                    session = self._require_session()
+                    agent_id = payload.get("agent_id")
+                    new_token = payload.get("new_token")
+                    if not isinstance(agent_id, str) or (new_token is not None and not isinstance(new_token, str)):
+                        raise NexusError("NX-VAL-001", "invalid rotate-token payload")
+                    self._send_json(200, storage.rotate_agent_token(actor=session, target_agent_id=agent_id, new_token=new_token))
+                    return
+
+                if path == "/v1/nexus/github/webhooks/process":
+                    session = self._require_session()
+                    limit = payload.get("limit", 25)
+                    if not isinstance(limit, int):
+                        raise NexusError("NX-VAL-001", "invalid webhook processing limit")
+                    self._send_json(200, storage.process_queued_github_events(actor=session, limit=limit))
+                    return
+
                 if path == "/v1/github/webhooks":
                     secret = os.environ.get("NEXUS_GITHUB_WEBHOOK_SECRET", "")
-                    # The payload has already been parsed; use the canonical JSON bytes for deterministic verification in tests.
-                    raw = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
-                    verify_webhook_signature(secret=secret, body=raw, signature_header=self.headers.get("X-Hub-Signature-256"))
+                    verify_webhook_signature(secret=secret, body=raw_body, signature_header=self.headers.get("X-Hub-Signature-256"))
                     delivery_id = self.headers.get("X-GitHub-Delivery") or ""
                     event_type = self.headers.get("X-GitHub-Event") or ""
                     if not delivery_id or not event_type:
                         raise NexusError("NX-GH-VALIDATION", "missing GitHub webhook headers")
-                    self._send_json(200, storage.record_github_event(delivery_id=delivery_id, event_type=event_type, payload=payload))
+                    self._send_json(202, storage.record_github_event(delivery_id=delivery_id, event_type=event_type, payload=payload))
                     return
 
                 if path.startswith("/v1/nexus/requests/") and path.endswith("/transition"):
@@ -271,6 +369,7 @@ def _make_handler(storage: Storage):
                         repo_id=repo_id,
                         branch=payload.get("branch"),
                         assigned_agent_id=payload.get("assigned_agent_id"),
+                        reviewer_agent_id=payload.get("reviewer_agent_id"),
                         sanitized_summary=payload.get("sanitized_summary"),
                     )
                     self._send_json(200, result)
@@ -307,7 +406,10 @@ def _make_handler(storage: Storage):
                     reason = payload.get("reason")
                     if not isinstance(to_status, str) or not isinstance(reason, str):
                         raise NexusError("NX-VAL-001", "invalid work transition payload")
-                    self._send_json(200, storage.transition_work(actor=session, request_id=request_id, to_status=to_status, reason=reason, override=bool(payload.get("override", False))))
+                    approved_by = payload.get("approved_by")
+                    if approved_by is not None and not isinstance(approved_by, str):
+                        raise NexusError("NX-VAL-001", "invalid manual override approver")
+                    self._send_json(200, storage.transition_work(actor=session, request_id=request_id, to_status=to_status, reason=reason, override=bool(payload.get("override", False)), approved_by=approved_by))
                     return
 
                 if path.startswith("/v1/nexus/work/") and path.endswith("/evidence"):
@@ -384,6 +486,22 @@ def _make_handler(storage: Storage):
                     self._send_json(200, storage.list_scopes(actor=session, target_agent_id=agent_id))
                     return
 
+
+                if path == "/v1/nexus/scopes/leases":
+                    session = self._require_session()
+                    agent_id = (query.get("agent_id") or [None])[0]
+                    active_only = (query.get("active") or ["1"])[0] != "0"
+                    self._send_json(200, storage.list_scope_leases(actor=session, agent_id=agent_id, active_only=active_only))
+                    return
+
+                if path == "/v1/nexus/events":
+                    session = self._require_session()
+                    target_type = (query.get("target_type") or [None])[0]
+                    target_id = (query.get("target_id") or [None])[0]
+                    limit = self._parse_int_query(query, "limit", 100)
+                    self._send_json(200, storage.list_event_log(actor=session, target_type=target_type, target_id=target_id, limit=limit))
+                    return
+
                 if path == "/v1/nexus/scopes/effective":
                     session = self._require_session()
                     self._send_json(200, storage.effective_scopes(actor=session))
@@ -440,6 +558,13 @@ def _make_handler(storage: Storage):
                     session = self._require_session()
                     request_id = path.split("/")[5]
                     self._send_json(200, storage.github_status(actor=session, request_id=request_id))
+                    return
+
+                if path == "/v1/nexus/github/alerts":
+                    session = self._require_session()
+                    unresolved = query.get("unresolved", ["1"])[0] != "0"
+                    limit = int(query.get("limit", ["50"])[0])
+                    self._send_json(200, storage.list_github_alerts(actor=session, unresolved_only=unresolved, limit=limit))
                     return
 
                 if path == "/v1/nexus/github/repositories":
@@ -503,29 +628,41 @@ def _make_handler(storage: Storage):
                 raise NexusError("NX-PERM-001", "agent header does not match active session")
             return session
 
-        def _read_json(self) -> dict[str, Any]:
+        def _read_json_with_raw(self) -> tuple[bytes, dict[str, Any]]:
             try:
                 length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 raise NexusError("NX-VAL-001", "invalid content length")
             if length <= 0:
-                return {}
+                return b"", {}
             if length > _MAX_JSON_BODY_BYTES:
-                self.rfile.read(length)
+                # Do not drain large request bodies in tests or in the embedded
+                # server. Mark the connection for close and reject immediately so
+                # a slow or oversized client cannot pin a handler thread.
+                self.close_connection = True
                 raise NexusError("NX-VAL-001", "request payload too large")
             raw = self.rfile.read(length)
             try:
-                return json.loads(raw.decode("utf-8"))
+                payload = json.loads(raw.decode("utf-8"))
             except json.JSONDecodeError:
                 raise NexusError("NX-VAL-001", "invalid json payload")
+            if not isinstance(payload, dict):
+                raise NexusError("NX-VAL-001", "json payload must be an object")
+            return raw, payload
 
         def _send_json(self, status_code: int, payload: dict[str, Any]) -> None:
             body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+            self.close_connection = True
             self.send_response(status_code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
+            try:
+                self.wfile.flush()
+            except OSError:  # pragma: no cover - client disconnected during error response
+                pass
 
         def _send_error_json(self, error: NexusError) -> None:
             status_code = _http_status_for_error(error.code)

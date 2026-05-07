@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 import sqlite3
 
 from nexusctl.backend.storage import SessionContext, Storage, initialize_database, seed_mvp_data
 
 
+
+pytestmark = pytest.mark.unit
 def _seed_tokens() -> dict[str, str]:
     return {
         "main-01": "tok_main",

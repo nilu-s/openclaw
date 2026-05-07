@@ -19,4 +19,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-addopts = "-q"
+addopts = "-q -ra -p no:ddtrace --durations=20"
+faulthandler_timeout = 60
+markers = [
+    "unit: fast tests without an embedded HTTP server",
+    "integration: tests that start the embedded nexusctl HTTP server",
+    "networkish: tests that intentionally exercise unreachable network paths with short timeouts",
+    "slow: tests that may be slower on constrained CI workers",
+]

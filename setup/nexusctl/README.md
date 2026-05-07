@@ -1,85 +1,85 @@
 # nexusctl
 
-`nexusctl` is the command line and HTTP control plane for Nexus v2. Nexus is the source of truth for systems, goals, requests, work, scopes, lifecycle and evidence. GitHub remains the source of truth for code, issues, pull requests, reviews and CI.
+`nexusctl` is the local CLI and HTTP control plane for Nexus v2 inside the OpenClaw setup.
 
-## Setup
+Nexus is the source of truth for systems, goals, requests, work, scopes, lifecycle and evidence. GitHub remains the source of truth for code, issues, pull requests, reviews and CI. The GitHub adapter is a synchronization and evidence layer, not a second work database.
 
-### Environment Variables
+## Environment
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `NEXUSCTL_API_BASE_URL` | no | `http://127.0.0.1:8080` | Base URL of the nexusctl-server backend |
-| `NEXUS_AGENT_TOKEN` | no | — | Agent token for automatic authentication (skips `nexusctl auth`) |
-| `NEXUSCTL_AGENT_ID` | no | — | Override the agent identity (also reads `OPENCLAW_AGENT_ID`) |
-| `NEXUSCTL_AGENT_DIR` | no | — | Path to agent directory for session storage |
-| `NEXUSCTL_SESSION_BASE` | no | `~/.openclaw/agents` | Base path for agent session directories |
-| `NEXUSCTL_SEED_TOKENS_FILE` | no | `/home/node/.openclaw/nexusctl/seed_tokens.env` | Path to seed token file for automatic auth |
-| `NEXUSCTL_ALLOW_INSECURE_REMOTE` | no | — | Allow insecure HTTP to non-loopback hosts |
-| `NEXUS_GITHUB_TOKEN` | no | — | GitHub personal access token (read by GitHub auth provider only) |
+| Variable | Required | Default | Purpose |
+|---|---:|---|---|
+| `NEXUSCTL_API_BASE_URL` | no | `http://127.0.0.1:8080` | Nexusctl server URL |
+| `NEXUS_AGENT_TOKEN` | no | — | Agent token for automatic authentication |
+| `NEXUSCTL_AGENT_ID` | no | — | Agent identity override; also reads `OPENCLAW_AGENT_ID` |
+| `NEXUSCTL_AGENT_DIR` | no | — | Agent-local session directory |
+| `NEXUSCTL_SESSION_BASE` | no | `~/.openclaw/agents` | Base directory for sessions |
+| `NEXUSCTL_SEED_TOKENS_FILE` | no | `/home/node/.openclaw/nexusctl/seed_tokens.env` | Seed token file |
+| `NEXUSCTL_ALLOW_INSECURE_REMOTE` | no | false | Allows non-loopback HTTP targets only when explicitly enabled |
+| `NEXUSCTL_TIMEOUT_SECONDS` | no | conservative default | CLI request timeout override |
+| `NEXUSCTL_AUTH_TIMEOUT_SECONDS` | no | conservative default | Auth request timeout override |
+| `NEXUS_GITHUB_TOKEN` | no | — | GitHub token read by the server-side GitHub auth provider only |
 | `NEXUS_GITHUB_API_BASE` | no | `https://api.github.com` | GitHub API base URL |
-| `NEXUS_GITHUB_WEBHOOK_SECRET` | no | — | HMAC secret for webhook signature verification |
+| `NEXUS_GITHUB_WEBHOOK_SECRET` | no | — | HMAC secret for webhook verification |
 
-Only the GitHub auth provider reads `NEXUS_GITHUB_TOKEN`. Worker agents receive Nexus-scoped views and commands, not global GitHub orchestration rights.
+Worker agents should talk to Nexusctl with Nexus-scoped commands. They should not receive `GH_TOKEN`, `GITHUB_TOKEN` or broad repository credentials.
 
 ## Authentication
 
 ```bash
 nexusctl auth --agent-token <TOKEN>
-nexusctl auth                          # reads NEXUS_AGENT_TOKEN or seed token file
+nexusctl auth --output json
 ```
 
-Authentication creates a server-side session and persists it locally. All subsequent commands reuse the active session. If `NEXUS_AGENT_TOKEN` is set, every command automatically re-authenticates.
+Authentication creates a server-side session and stores it locally for the active agent. If `NEXUS_AGENT_TOKEN` is present, commands can re-authenticate automatically.
 
-## Commands
+## CLI reference
 
-### Context
+All commands support `--output table|json` unless noted. Agent-facing automation should prefer `--output json`.
+
+### Context and maintenance
 
 ```bash
 nexusctl context [--output table|json]
+nexusctl rotate-token --agent-id AGENT_ID [--new-token TOKEN] [--output table|json]
+nexusctl events [--target-type TYPE] [--target-id ID] [--limit N] [--output table|json]
+nexusctl db backup [--path PATH] [--output table|json]
+nexusctl db restore-check BACKUP_PATH [--output table|json]
 ```
 
-Returns an aggregated view of the calling agent's systems, goals, capabilities, work, repos, reviews and allowed actions.
-
-### Systems
+### Systems, goals, capabilities and runtime tools
 
 ```bash
 nexusctl systems list [--status all|planned|active|paused|retired] [--output table|json]
-nexusctl systems show <system_id> [--output table|json]
-```
+nexusctl systems show SYSTEM_ID [--output table|json]
 
-### Goals
-
-```bash
 nexusctl goals list [--system-id ID] [--status all|proposed|active|blocked|achieved|deprecated] [--limit N] [--output table|json]
-nexusctl goals show <goal_id> [--output table|json]
+nexusctl goals show GOAL_ID [--output table|json]
 nexusctl goals create --goal-id ID --title TEXT --objective TEXT --risk-class low|medium|high|critical --priority P0|P1|P2|P3 \
   [--system-id ID] [--success-metric TEXT]... [--constraint TEXT]... [--owner-agent-id ID] [--status STATUS] [--parent-goal-id ID] [--output table|json]
-nexusctl goals update-status <goal_id> --to proposed|active|blocked|achieved|deprecated --reason TEXT [--output table|json]
+nexusctl goals update-status GOAL_ID --to proposed|active|blocked|achieved|deprecated --reason TEXT [--output table|json]
+
+nexusctl capabilities list [--status all|planned|in_progress|available|blocked|deprecated] [--system-id ID] [--output table|json]
+nexusctl capabilities show CAPABILITY_ID [--output table|json]
+nexusctl capabilities set-status CAPABILITY_ID --to planned|available --reason TEXT [--output table|json]
+
+nexusctl runtime-tools list [--system-id ID] [--status all|planned|in_progress|available|blocked|deprecated] [--output table|json]
+nexusctl runtime-tools show TOOL_ID [--output table|json]
+nexusctl runtime-tools check TOOL_ID [--request-id REQ_ID] [--side-effect-level LEVEL] [--human-approved] [--output table|json]
 ```
+
+`capabilities set-status` is intentionally narrow; the MVP path promotes or reverts availability under lifecycle control.
 
 ### Scopes
 
 ```bash
-nexusctl scopes list [--agent-id ID] [--output table|json]
+nexusctl scopes list [--agent-id AGENT_ID] [--output table|json]
 nexusctl scopes effective [--output table|json]
+nexusctl scopes lease --agent-id AGENT_ID --scope SCOPE [--system-id ID|*] [--resource PATTERN] [--request-id REQ_ID] --reason TEXT [--ttl-minutes N] [--approved-by AGENT_ID] [--output table|json]
+nexusctl scopes leases [--agent-id AGENT_ID] [--all] [--output table|json]
+nexusctl scopes revoke-lease LEASE_ID --reason TEXT [--output table|json]
 ```
 
-### Capabilities
-
-```bash
-nexusctl capabilities list [--status all|planned|in_progress|available|blocked|deprecated] [--system-id ID] [--output table|json]
-nexusctl capabilities show <capability_id> [--output table|json]
-nexusctl capabilities set-status <capability_id> --to planned|available --reason TEXT [--output table|json]
-```
-
-`set-status` is restricted to `sw-techlead`. MVP only allows transition to `available`.
-
-### Runtime Tools
-
-```bash
-nexusctl runtime-tools list [--system-id ID] [--status all|planned|in_progress|available|blocked|deprecated] [--output table|json]
-nexusctl runtime-tools show <tool_id> [--output table|json]
-```
+Leases are temporary scope extensions. Use them instead of widening permanent agent permissions.
 
 ### Requests
 
@@ -89,109 +89,72 @@ nexusctl request create --objective TEXT --missing-capability TEXT --business-im
   --priority P0|P1|P2|P3 --goal-ref ID [--output table|json]
 
 nexusctl request list [--status STATUS] [--limit N] [--output table|json]
-nexusctl request show <request_id> [--output table|json]
-nexusctl request transition <request_id> --to STATUS --reason TEXT [--output table|json]
+nexusctl request show REQUEST_ID [--output table|json]
+nexusctl request transition REQUEST_ID --to STATUS_OR_ALIAS --reason TEXT [--output table|json]
 ```
 
-`request create` is restricted to `trading-strategist` and `trading-sentinel`. `request transition` is restricted to `nexus` and `trading-strategist`.
+The deterministic dedupe key for new requests is `objective + missing_capability + goal_ref`. `goal_ref` must resolve through a Nexus goal alias such as `TG-003` or `trading-goal://risk/limit-hard-stop`.
 
-### Repositories
+Direct request transitions cannot move software work through work-managed statuses; use `nexusctl work transition` for implementation lifecycle.
+
+### Repositories and work
 
 ```bash
 nexusctl repos list [--output table|json]
 nexusctl repos assigned [--output table|json]
-nexusctl repos show <repo_id> [--output table|json]
-```
+nexusctl repos show REPO_ID [--output table|json]
 
-### Work
-
-```bash
 nexusctl work list [--status STATUS] [--limit N] [--output table|json]
-nexusctl work show <request_id> [--output table|json]
-nexusctl work plan <request_id> --repo REPO_ID [--branch NAME] [--assign AGENT_ID] [--sanitized-summary TEXT] [--output table|json]
-nexusctl work set-implementation-context <request_id> [--context-file PATH] [--component NAME] \
+nexusctl work show REQUEST_ID [--output table|json]
+nexusctl work plan REQUEST_ID --repo REPO_ID [--branch NAME] [--assign BUILDER_AGENT_ID] [--reviewer REVIEWER_AGENT_ID] [--sanitized-summary TEXT] [--output table|json]
+nexusctl work set-implementation-context REQUEST_ID [--context-file PATH] [--component NAME] \
   [--entrypoint PATH]... [--likely-file PATH]... [--do-not-touch PATTERN]... [--interface NAME]... \
   [--acceptance-criteria TEXT]... [--test-command CMD]... [--notes TEXT] [--output table|json]
-nexusctl work approve-plan <request_id> [--output table|json]
-nexusctl work assign <request_id> --agent AGENT_ID [--output table|json]
-nexusctl work transition <request_id> --to STATUS --reason TEXT [--override] [--output table|json]
-nexusctl work submit-evidence <request_id> --kind KIND --summary TEXT [--ref REF] [--output table|json]
+nexusctl work approve-plan REQUEST_ID [--output table|json]
+nexusctl work assign REQUEST_ID --agent AGENT_ID [--output table|json]
+nexusctl work transition REQUEST_ID --to STATUS_OR_ALIAS --reason TEXT [--override --approved-by AGENT_ID] [--output table|json]
+nexusctl work submit-evidence REQUEST_ID --kind KIND --summary TEXT [--ref REF] [--output table|json]
 ```
 
-`work show` may display embedded GitHub status but never performs GitHub actions.
+Builder and reviewer ownership are separate fields. `--assign` sets the builder (`assigned_agent_id`); `--reviewer` sets the reviewer (`reviewer_agent_id`).
 
-Manual override is limited to `sw-techlead` and `nexus` and always writes `manual_override` evidence:
+Manual override is restricted to `sw-techlead` and `nexus`, cannot skip lifecycle gates, requires a durable reason and a second approver via `--approved-by`, and records `manual_override` evidence.
 
-```bash
-nexusctl work transition REQ-123 --to done --override --reason "manual verification"
-```
-
-### GitHub Commands
+### GitHub adapter
 
 ```bash
-nexusctl github issue create <request_id> [--dry-run] [--title TEXT] [--label LABEL]... [--assignee USER]... [--output table|json]
-nexusctl github issue sync <request_id> [--output table|json]
+nexusctl github issue create REQUEST_ID [--dry-run] [--title TEXT] [--label LABEL]... [--assignee USER]... [--output table|json]
+nexusctl github issue sync REQUEST_ID [--output table|json]
 
-nexusctl github pr link <request_id> --url URL [--output table|json]
-nexusctl github pr sync <request_id> [--output table|json]
+nexusctl github pr link REQUEST_ID --url URL [--output table|json]
+nexusctl github pr sync REQUEST_ID [--output table|json]
 
-nexusctl github status <request_id> [--output table|json]
-nexusctl github sync <request_id> [--output table|json]
+nexusctl github status REQUEST_ID [--output table|json]
+nexusctl github sync REQUEST_ID [--output table|json]
+nexusctl github alerts [--all] [--limit N] [--output table|json]
 
 nexusctl github repos list [--output table|json]
 nexusctl github repos sync [--output table|json]
 ```
 
-`github repos list` and `github repos sync` are restricted to `sw-techlead` and `nexus`.
+`github repos list` and `github repos sync` are restricted to `sw-techlead` and `nexus`. Builders and reviewers only see/sync GitHub state for assigned work.
 
 ### Reviews
 
 ```bash
 nexusctl reviews list [--status STATUS] [--limit N] [--output table|json]
-nexusctl reviews submit <request_id> --verdict approved|changes-requested|rejected --summary TEXT [--output table|json]
+nexusctl reviews submit REQUEST_ID --verdict approved|changes-requested|rejected --summary TEXT [--output table|json]
 ```
 
-## Common Flow
+## Lifecycle model
 
-```bash
-nexusctl request create --objective "..." --missing-capability "..." --business-impact "..." \
-  --expected-behavior "..." --acceptance-criteria "..." --risk-class high --priority P1 --goal-ref TG-003
+Canonical statuses:
 
-nexusctl request transition REQ-123 --to accepted --reason "accepted"
-nexusctl work plan REQ-123 --repo trading-engine --branch feature/req-123 --sanitized-summary "Implement deterministic risk limit checker"
-nexusctl work set-implementation-context REQ-123 --component risk --likely-file src/trading_engine/risk/check_order.py --do-not-touch src/trading_engine/execution/live_orders.py --test-command "pytest tests/risk"
-nexusctl work approve-plan REQ-123
-
-nexusctl github issue create REQ-123 --dry-run
-nexusctl github issue create REQ-123 --label nexus --assignee alice
-nexusctl github pr link REQ-123 --url https://github.com/org/repo/pull/78
-nexusctl github pr sync REQ-123
-nexusctl github status REQ-123
-nexusctl work transition REQ-123 --to in-review --reason "PR ready"
-nexusctl work transition REQ-123 --to approved --reason "review and CI passed"
-nexusctl work transition REQ-123 --to done --reason "PR merged"
-```
-
-## GitHub Adapter Overview
-
-The Nexus GitHub Adapter v2.1 is a controlled synchronization and evidence layer. It does not clone repositories, edit code, commit, push, resolve merge conflicts, merge pull requests, crawl global repositories or give worker agents broad GitHub credentials.
-
-GitHub metadata is stored only in dedicated adapter tables:
-
-- `github_issues`
-- `github_pull_requests`
-- `github_events`
-
-`requests` stays clean and contains only Nexus work-routing fields such as `target_repo_id`, `branch`, assignment and implementation context.
-
-## Request Lifecycle
-
-Requests follow a 14-status state machine with enforced transition rules:
-
-```
-draft → submitted → accepted → needs-planning → ready-to-build → in-build → in-review → approved → done → adoption-pending → closed
-                  ↘ gate-rejected → draft                                                ↘ review-failed → in-build
-                                                                                          ↘ state-update-needed → in-review
+```text
+draft -> submitted -> accepted -> needs-planning -> ready-to-build -> in-build -> in-review -> approved -> done -> adoption-pending -> closed
+            |              |                     |             |             |            |
+            v              v                     v             v             v            v
+       gate-rejected    cancelled             cancelled     cancelled  review-failed  state-update-needed
 ```
 
 Valid transitions:
@@ -214,50 +177,181 @@ Valid transitions:
 | `closed` | — |
 | `cancelled` | — |
 
-## Lifecycle Gates
+Aliases accepted by transition commands:
 
-Transition to `in-review` requires approved implementation context and a linked PR.
+| Alias | Status |
+|---|---|
+| `intake` | `submitted` |
+| `planned` | `needs-planning` |
+| `build-ready` | `ready-to-build` |
+| `building` | `in-build` |
+| `review` | `in-review` |
+| `approve` | `approved` |
+| `complete` | `done` |
+| `close` | `closed` |
 
-Transition to `approved` requires GitHub review state `approved`, checks state `passing`, and policy state `ok`.
+Lifecycle gates:
 
-Transition to `done` requires a merged PR, a merge commit SHA, review evidence, checks evidence and no do-not-touch violation.
+- `in-review` requires approved implementation context and a linked PR.
+- `approved` requires fresh PR sync, review state `approved`, checks state `passing`, and policy state `ok`.
+- `done` requires a merged PR, merge commit SHA, fresh review/check evidence and no do-not-touch policy violation.
+- Manual override can resolve exceptional cases but still must satisfy lifecycle gates.
 
-Override (`--override`) is limited to `sw-techlead` and `nexus` and always writes `manual_override` evidence.
+## GitHub integration
 
-## Agent Roles
+The adapter creates sanitized issues, links PRs, syncs issue/PR/review/check/file state, records evidence and accepts webhook delivery events.
 
-| Role | Domain | Key Permissions |
-|---|---|---|
-| `main` | Control | Read-only across all systems |
-| `nexus` | Control | Full lifecycle, scope and system management |
-| `trading-strategist` | Trading | Create requests, read trading-system |
-| `trading-analyst` | Trading | Evidence, market data, read trading-system |
-| `trading-sentinel` | Trading | Draft requests, alerts, monitoring |
-| `sw-architect` | Software | Plan work, create issues, assign |
-| `sw-techlead` | Software | Full work lifecycle, override gates, capability set-status |
-| `sw-builder` | Software | Build assigned work, link assigned PRs |
-| `sw-reviewer` | Software | Review assigned work, submit verdicts |
-| `platform-optimizer` | Control | Process optimization on agent-platform |
+### Storage boundaries
 
-Builders and reviewers receive assigned-only visibility. Tech leads and Nexus can inspect broader adapter status.
+GitHub metadata is stored in dedicated tables:
 
-## Server
+- `github_issues`
+- `github_pull_requests`
+- `github_events`
 
-```bash
-nexusctl-server --host 127.0.0.1 --port 8080 --db-path .nexusctl/nexusctl.sqlite3 [--seed] \
-  [--tls-cert-file PATH] [--tls-key-file PATH] [--allow-insecure-remote]
+Requests remain Nexus work-routing records: source/target systems, `goal_ref`, objective, status, priority, risk, target repo, branch, builder/reviewer assignment and implementation context.
+
+### Auth and transport
+
+The server-side GitHub client sends the configured token with GitHub API headers and a `nexusctl` user agent. Worker agents do not call GitHub directly and do not receive the GitHub token.
+
+### Repository registry
+
+Nexus repositories map `repo_id` to GitHub owner/repo metadata. PR URLs must match the `target_repo_id` repository before linking.
+
+### Issue creation
+
+`github issue create` renders a sanitized issue body from Nexus request and implementation context. `--dry-run` returns the rendered body and writes nothing to GitHub or adapter tables.
+
+### PR sync
+
+`github pr sync` reads paginated PR files, reviews, commits and check-runs. Latest review per reviewer determines review state; failing checks dominate pending/passing aggregation. Stale approvals older than the latest commit are rejected for lifecycle gates.
+
+### Policy checks
+
+The do-not-touch policy evaluates changed files and renamed files via `previous_filename`. Default sensitive patterns block common secret, key and env-file paths even if a work item forgot to list them explicitly.
+
+### Evidence kinds
+
+GitHub synchronization emits work evidence such as:
+
+- `github_issue`
+- `github_issue_sync`
+- `github_pr_linked`
+- `github_pr_sync`
+- `github_reviews`
+- `github_checks`
+- `github_policy_violation`
+- `github_sync`
+- `github_webhook`
+- `manual_override`
+
+### Webhooks
+
+`POST /v1/github/webhooks` verifies `X-Hub-Signature-256` against the raw request body, stores idempotent delivery events and returns `202 Accepted`. Processing is explicit through the authenticated worker endpoint. Failed processing is persisted as `dead_letter` so `nexusctl github alerts` can surface it.
+
+### What the adapter does not do
+
+It does not clone, edit, commit, push, merge, resolve conflicts, crawl arbitrary repositories or give worker agents global GitHub rights.
+
+### Failure modes
+
+GitHub and adapter failures map to stable errors such as `NX-GH-AUTH`, `NX-GH-NOT-FOUND`, `NX-GH-DISABLED`, `NX-GH-VALIDATION`, `NX-GH-RATE-LIMIT` and `NX-GH-UPSTREAM`. Raw GitHub tracebacks are not exposed to agents.
+
+## HTTP API
+
+The CLI is the default interface. These HTTP routes back it:
+
+```http
+POST /v1/nexus/auth
+GET  /v1/nexus/context
+GET  /v1/nexus/systems
+GET  /v1/nexus/systems/{system_id}
+GET  /v1/nexus/goals
+POST /v1/nexus/goals
+GET  /v1/nexus/goals/{goal_id}
+POST /v1/nexus/goals/{goal_id}/status
+GET  /v1/nexus/scopes
+GET  /v1/nexus/scopes/effective
+GET  /v1/nexus/scopes/leases
+POST /v1/nexus/scopes/leases
+POST /v1/nexus/scopes/leases/{lease_id}/revoke
+GET  /v1/nexus/events
+POST /v1/nexus/db/backup
+POST /v1/nexus/db/restore-check
+GET  /v1/nexus/runtime-tools
+GET  /v1/nexus/runtime-tools/{tool_id}
+POST /v1/nexus/runtime-tools/{tool_id}/guardrail
+GET  /v1/nexus/capabilities
+GET  /v1/nexus/capabilities/{capability_id}
+POST /v1/nexus/capabilities/{capability_id}/status
+GET  /v1/nexus/requests
+POST /v1/nexus/requests
+GET  /v1/nexus/requests/{request_id}
+POST /v1/nexus/requests/{request_id}/transition
+GET  /v1/nexus/repos
+GET  /v1/nexus/repos/{repo_id}
+GET  /v1/nexus/work
+GET  /v1/nexus/work/{request_id}
+POST /v1/nexus/work/{request_id}/plan
+POST /v1/nexus/work/{request_id}/implementation-context
+POST /v1/nexus/work/{request_id}/approve-plan
+POST /v1/nexus/work/{request_id}/assign
+POST /v1/nexus/work/{request_id}/transition
+POST /v1/nexus/work/{request_id}/evidence
+GET  /v1/nexus/reviews
+POST /v1/nexus/reviews/{request_id}
+POST /v1/nexus/github/issues/{request_id}
+POST /v1/nexus/github/issues/{request_id}/sync
+POST /v1/nexus/github/pull-requests/{request_id}/link
+POST /v1/nexus/github/pull-requests/{request_id}/sync
+GET  /v1/nexus/github/status/{request_id}
+POST /v1/nexus/github/sync/{request_id}
+GET  /v1/nexus/github/alerts
+GET  /v1/nexus/github/repositories
+POST /v1/nexus/github/repositories/sync
+POST /v1/nexus/github/webhooks/process
+POST /v1/github/webhooks
 ```
 
-- `--seed` initializes agent registry, systems, goals, capabilities and runtime tools.
-- `--tls-cert-file` and `--tls-key-file` enable TLS. Both must be provided together.
-- `--allow-insecure-remote` permits non-loopback bind without TLS.
-- `GET /healthz` returns `{"ok": true, "service": "nexusctl-server"}`.
+`GET /healthz` returns a simple health payload. The server should bind to `127.0.0.1` unless TLS and explicit remote exposure are configured.
 
-## Documentation
+## Output and errors
 
-See:
+Table output is for humans; JSON output is stable for agents and wrappers. Common error classes:
 
-- `docs/API_CONTRACT.md`
-- `docs/SOURCE_OF_TRUTH_V2.md`
-- `docs/GITHUB_INTEGRATION.md`
-- `NEXUSCTL_CLI_DESIGN.md`
+| Code | Exit Code | Meaning |
+|---|---:|---|
+| `NX-VAL-001` | 2 | Validation error |
+| `NX-VAL-002` | 2 | Missing required credential |
+| `NX-NOTFOUND-001` | 3 | Resource not found |
+| `NX-PERM-001` | 4 | Permission denied |
+| `NX-PRECONDITION-001` | 6 | Missing precondition or session |
+| `NX-PRECONDITION-002` | 6 | Session expired |
+| `NX-PRECONDITION-003` | 6 | State precondition failed |
+| `NX-INFRA-001` | 10 | Backend not reachable |
+| `NX-INFRA-002` | 10 | Unexpected infrastructure error |
+
+## Testing
+
+The suite uses markers so fast logic tests do not need embedded HTTP servers:
+
+- `unit` — fast tests without an embedded HTTP server.
+- `integration` — tests that start `nexusctl-server` through `ThreadingHTTPServer`.
+- `networkish` — tests around unreachable-network behavior; timeouts should be explicit and short.
+- `slow` — slower tests on constrained machines.
+
+Recommended commands:
+
+```bash
+PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q -ra
+PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -m unit -q -ra
+PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -m integration -q -ra
+./scripts/run_tests.sh
+```
+
+`./scripts/run_tests.sh` disables ambient pytest plugin autoloading and wraps the suite in a process-level timeout.
+
+## Packaging hygiene
+
+Do not package generated caches, runtime DBs, `.env`, `.coverage`, `*.pyc`, `.pytest_cache`, `__pycache__` or local logs. The root validator checks this before deployment.

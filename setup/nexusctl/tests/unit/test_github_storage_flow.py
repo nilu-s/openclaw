@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 import sqlite3
 
 from nexusctl.backend.integrations.github import FakeGitHubClient
 from nexusctl.backend.storage import SessionContext, Storage, initialize_database, seed_mvp_data
 
 
+
+pytestmark = pytest.mark.unit
 TOKENS = {
     "nexus-01": "tok_nexus",
     "sw-architect-01": "tok_architect",
@@ -155,3 +159,104 @@ def test_do_not_touch_violation_blocks_approved_transition(tmp_path):
         assert getattr(exc, "code", None) == "NX-PRECONDITION-001"
     else:
         raise AssertionError("approved transition should be blocked by do-not-touch violation")
+
+
+def test_approved_transition_rejects_stale_github_snapshot(tmp_path):
+    storage, fake, db_path, request_id, architect, techlead, _builder = _prepared_work(tmp_path)
+    key = ("local", "trading-engine", 80)
+    fake.pull_requests[key] = {
+        "number": 80,
+        "node_id": "PR_80",
+        "title": "Implement deterministic risk limit checker",
+        "state": "open",
+        "draft": False,
+        "merged": False,
+        "merge_commit_sha": None,
+        "head": {"ref": "feature/req-risk-checker", "sha": "stale123"},
+        "base": {"ref": "main"},
+        "html_url": "https://github.com/local/trading-engine/pull/80",
+        "url": "https://api.github.com/repos/local/trading-engine/pulls/80",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "merged_at": None,
+    }
+    fake.files[key] = [{"filename": "src/trading_engine/risk/check_order.py"}]
+    fake.reviews[key] = [{"user": {"login": "reviewer"}, "state": "APPROVED", "submitted_at": "2026-01-02T00:00:00Z"}]
+    fake.commits[key] = [{"sha": "stale123", "html_url": "https://github.com/local/trading-engine/commit/stale123"}]
+    fake.check_runs[("local", "trading-engine", "stale123")] = {"check_runs": [{"status": "completed", "conclusion": "success"}]}
+    storage.link_github_pr(actor=techlead, request_id=request_id, url="https://github.com/local/trading-engine/pull/80")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE github_pull_requests SET last_synced_at = '2026-01-01T00:00:00Z' WHERE request_id = ?", (request_id,))
+    storage.transition_work(actor=architect, request_id=request_id, to_status="needs-planning", reason="Move into software planning.")
+    storage.transition_work(actor=architect, request_id=request_id, to_status="ready-to-build", reason="Plan approved with context.")
+    storage.transition_work(actor=techlead, request_id=request_id, to_status="in-build", reason="Implementation can start.")
+    storage.transition_work(actor=techlead, request_id=request_id, to_status="in-review", reason="Pull request is linked.")
+    with pytest.raises(Exception) as excinfo:
+        storage.transition_work(actor=techlead, request_id=request_id, to_status="approved", reason="Attempt approval using stale GitHub snapshot.")
+    assert getattr(excinfo.value, "code", None) == "NX-PRECONDITION-001"
+    assert "fresh GitHub PR sync" in getattr(excinfo.value, "message", str(excinfo.value))
+
+
+def test_github_webhook_is_queued_and_processed_by_worker(tmp_path):
+    storage, fake, db_path, request_id, _architect, techlead, _builder = _prepared_work(tmp_path)
+    key = ("local", "trading-engine", 81)
+    fake.pull_requests[key] = {
+        "number": 81,
+        "node_id": "PR_81",
+        "title": "Webhook queued PR",
+        "state": "open",
+        "draft": False,
+        "merged": False,
+        "head": {"ref": "feature/req-risk-checker", "sha": "queue123"},
+        "base": {"ref": "main"},
+        "html_url": "https://github.com/local/trading-engine/pull/81",
+        "url": "https://api.github.com/repos/local/trading-engine/pulls/81",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "merged_at": None,
+    }
+    fake.files[key] = [{"filename": "src/trading_engine/risk/check_order.py"}]
+    storage.link_github_pr(actor=techlead, request_id=request_id, url="https://github.com/local/trading-engine/pull/81")
+    payload = {"action": "synchronize", "repository": {"name": "trading-engine", "owner": {"login": "local"}}, "pull_request": {"number": 81}}
+    event = storage.record_github_event(delivery_id="delivery-81", event_type="pull_request", payload=payload)
+    assert event["processing_status"] == "queued"
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT processing_status FROM github_events WHERE delivery_id = 'delivery-81'").fetchone()[0] == "queued"
+    processed = storage.process_queued_github_events(limit=10)
+    assert processed["processed"] == [event["event_id"]]
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT processing_status FROM github_events WHERE delivery_id = 'delivery-81'").fetchone()[0] == "processed"
+
+
+def test_github_webhook_worker_dead_letters_and_retries(tmp_path):
+    storage, fake, db_path, request_id, _architect, techlead, _builder = _prepared_work(tmp_path)
+    key = ("local", "trading-engine", 82)
+    fake.pull_requests[key] = {
+        "number": 82,
+        "node_id": "PR_82",
+        "title": "Webhook retry PR",
+        "state": "open",
+        "draft": False,
+        "merged": False,
+        "head": {"ref": "feature/req-risk-checker", "sha": "retry123"},
+        "base": {"ref": "main"},
+        "html_url": "https://github.com/local/trading-engine/pull/82",
+        "url": "https://api.github.com/repos/local/trading-engine/pulls/82",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "merged_at": None,
+    }
+    fake.files[key] = [{"filename": "src/trading_engine/risk/check_order.py"}]
+    storage.link_github_pr(actor=techlead, request_id=request_id, url="https://github.com/local/trading-engine/pull/82")
+    payload = {"action": "synchronize", "repository": {"name": "trading-engine", "owner": {"login": "local"}}, "pull_request": {"number": 82}}
+    event = storage.record_github_event(delivery_id="delivery-82", event_type="pull_request", payload=payload)
+    original = fake.pull_requests.pop(key)
+    first = storage.process_queued_github_events(limit=10)
+    assert first["dead_letter"][0]["event_id"] == event["event_id"]
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT processing_status FROM github_events WHERE delivery_id = 'delivery-82'").fetchone()[0] == "dead_letter"
+    fake.pull_requests[key] = original
+    second = storage.process_queued_github_events(limit=10)
+    assert second["processed"] == [event["event_id"]]
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT processing_status FROM github_events WHERE delivery_id = 'delivery-82'").fetchone()[0] == "processed"

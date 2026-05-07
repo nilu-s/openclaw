@@ -3,15 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nexus-openclaw:latest
+      args:
+        OPENCLAW_BASE_IMAGE: ${OPENCLAW_BASE_IMAGE:?Set OPENCLAW_BASE_IMAGE to a versioned image pinned by digest, e.g. ghcr.io/openclaw/openclaw:vX.Y.Z@sha256:<digest>}
+    image: ${NEXUS_OPENCLAW_IMAGE:-nexus-openclaw:local}
     container_name: ${OPENCLAW_CONTAINER_NAME:-openclaw-gateway}
     restart: unless-stopped
     init: true
 
     user: "1000:1000"
 
-    env_file:
-      - .env
 
     environment:
       HOME: /home/node
@@ -23,8 +23,8 @@ services:
       OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
 
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
-      OPENCLAW_GATEWAY_BIND: ${OPENCLAW_GATEWAY_BIND:-lan}
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_BIND: ${OPENCLAW_GATEWAY_BIND:-127.0.0.1}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:-http://127.0.0.1:18789}
 
       OPENCLAW_CRON_PROVIDER_PLUGIN_IDS: ${OPENCLAW_CRON_PROVIDER_PLUGIN_IDS:-ollama}
@@ -38,11 +38,9 @@ services:
       OPENCLAW_REMOTE_SSH_IDENTITY_FILE: ${OPENCLAW_REMOTE_SSH_IDENTITY_FILE:-/home/node/.ssh/id_ed25519}
       OPENCLAW_REMOTE_SSH_KNOWN_HOSTS_FILE: ${OPENCLAW_REMOTE_SSH_KNOWN_HOSTS_FILE:-/home/node/.ssh/known_hosts}
 
-      GH_TOKEN: ${GH_TOKEN:-}
-      GITHUB_TOKEN: ${GH_TOKEN:-}
 
-      NEXUSCTL_API_BASE_URL: ${NEXUSCTL_API_BASE_URL:-http://nexusctl-server:8080}
-      NEXUSCTL_ALLOW_INSECURE_REMOTE: ${NEXUSCTL_ALLOW_INSECURE_REMOTE:-true}
+      NEXUSCTL_API_BASE_URL: ${NEXUSCTL_API_BASE_URL:-http://127.0.0.1:8080}
+      NEXUSCTL_ALLOW_INSECURE_REMOTE: ${NEXUSCTL_ALLOW_INSECURE_REMOTE:-false}
 
     entrypoint:
       - /bin/sh
@@ -85,7 +83,7 @@ services:
       start_period: 120s
 
   nexusctl-server:
-    image: nexus-openclaw:latest
+    image: ${NEXUS_OPENCLAW_IMAGE:-nexus-openclaw:local}
     container_name: nexusctl-server
     user: "1000:1000"
     restart: unless-stopped
@@ -95,9 +93,14 @@ services:
       openclaw-gateway:
         condition: service_healthy
 
+    network_mode: "service:openclaw-gateway"
+
+
     environment:
       HOME: /home/node
       NODE_ENV: production
+      NEXUS_GITHUB_TOKEN: ${NEXUS_GITHUB_TOKEN:-}
+      NEXUS_GITHUB_WEBHOOK_SECRET: ${NEXUS_GITHUB_WEBHOOK_SECRET:-}
 
     command:
       - nexusctl-server
@@ -105,10 +108,9 @@ services:
       - /home/node/.openclaw/nexusctl/nexusctl.sqlite3
       - --seed
       - --host
-      - 0.0.0.0
+      - 127.0.0.1
       - --port
       - "8080"
-      - --allow-insecure-remote
 
     volumes:
       - /opt/openclaw/state:/home/node/.openclaw
@@ -124,14 +126,12 @@ services:
       start_period: 10s
 
   openclaw-cli:
-    image: nexus-openclaw:latest
+    image: ${NEXUS_OPENCLAW_IMAGE:-nexus-openclaw:local}
     profiles:
       - cli
 
     user: "1000:1000"
 
-    env_file:
-      - .env
 
     environment:
       HOME: /home/node
@@ -142,14 +142,12 @@ services:
 
       OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
 
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_GATEWAY_URL: ${OPENCLAW_GATEWAY_URL:-http://127.0.0.1:18789}
 
       OLLAMA_API_KEY: ${OPENCLAW_OLLAMA_API_KEY:-ollama-local}
       OLLAMA_BASE_URL: ${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
 
-      GH_TOKEN: ${GH_TOKEN:-}
-      GITHUB_TOKEN: ${GH_TOKEN:-}
 
     network_mode: "service:openclaw-gateway"
 

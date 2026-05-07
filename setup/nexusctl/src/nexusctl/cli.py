@@ -14,6 +14,17 @@ from nexusctl.output import write_json, write_key_values, write_table
 from nexusctl.session import SessionStore
 
 CAPABILITY_ID_PATTERN = re.compile(r"^[A-Z]+-[0-9]{3,}$")
+LIFECYCLE_ALIASES = {
+    "intake": "submitted",
+    "planned": "needs-planning",
+    "build-ready": "ready-to-build",
+    "building": "in-build",
+    "review": "in-review",
+    "approve": "approved",
+    "complete": "done",
+    "close": "closed",
+}
+
 REQUEST_STATUS_CHOICES = [
     "all",
     "draft",
@@ -46,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
     auth = subparsers.add_parser("auth")
     auth.add_argument("--agent-token")
     auth.add_argument("--output", choices=["table", "json"], default="table")
+
+    rotate_token = subparsers.add_parser("rotate-token")
+    rotate_token.add_argument("--agent-id", required=True, dest="agent_id")
+    rotate_token.add_argument("--new-token", default=None, dest="new_token")
+    rotate_token.add_argument("--output", choices=["table", "json"], default="table")
 
     context = subparsers.add_parser("context")
     context.add_argument("--output", choices=["table", "json"], default="table")
@@ -101,6 +117,39 @@ def build_parser() -> argparse.ArgumentParser:
     scopes_list.add_argument("--output", choices=["table", "json"], default="table")
     scopes_effective = scopes_subparsers.add_parser("effective")
     scopes_effective.add_argument("--output", choices=["table", "json"], default="table")
+    scopes_lease = scopes_subparsers.add_parser("lease")
+    scopes_lease.add_argument("--agent-id", required=True, dest="agent_id")
+    scopes_lease.add_argument("--scope", required=True)
+    scopes_lease.add_argument("--system-id", default="*", dest="system_id")
+    scopes_lease.add_argument("--resource", default="*", dest="resource_pattern")
+    scopes_lease.add_argument("--request-id", default=None, dest="request_id")
+    scopes_lease.add_argument("--reason", required=True)
+    scopes_lease.add_argument("--ttl-minutes", type=int, default=120, dest="ttl_minutes")
+    scopes_lease.add_argument("--approved-by", default=None, dest="approved_by")
+    scopes_lease.add_argument("--output", choices=["table", "json"], default="table")
+    scopes_leases = scopes_subparsers.add_parser("leases")
+    scopes_leases.add_argument("--agent-id", default=None, dest="agent_id")
+    scopes_leases.add_argument("--all", action="store_true", dest="include_inactive")
+    scopes_leases.add_argument("--output", choices=["table", "json"], default="table")
+    scopes_revoke = scopes_subparsers.add_parser("revoke-lease")
+    scopes_revoke.add_argument("lease_id")
+    scopes_revoke.add_argument("--reason", required=True)
+    scopes_revoke.add_argument("--output", choices=["table", "json"], default="table")
+
+    events = subparsers.add_parser("events")
+    events.add_argument("--target-type", default=None, dest="target_type")
+    events.add_argument("--target-id", default=None, dest="target_id")
+    events.add_argument("--limit", type=int, default=100)
+    events.add_argument("--output", choices=["table", "json"], default="table")
+
+    db = subparsers.add_parser("db")
+    db_sub = db.add_subparsers(dest="db_command", required=True)
+    db_backup = db_sub.add_parser("backup")
+    db_backup.add_argument("--path", default=None, dest="backup_path")
+    db_backup.add_argument("--output", choices=["table", "json"], default="table")
+    db_check = db_sub.add_parser("restore-check")
+    db_check.add_argument("backup_path")
+    db_check.add_argument("--output", choices=["table", "json"], default="table")
 
     runtime_tools = subparsers.add_parser("runtime-tools")
     rt_subparsers = runtime_tools.add_subparsers(dest="runtime_tools_command", required=True)
@@ -111,6 +160,12 @@ def build_parser() -> argparse.ArgumentParser:
     rt_show = rt_subparsers.add_parser("show")
     rt_show.add_argument("tool_id")
     rt_show.add_argument("--output", choices=["table", "json"], default="table")
+    rt_check = rt_subparsers.add_parser("check")
+    rt_check.add_argument("tool_id")
+    rt_check.add_argument("--request-id", default=None, dest="request_id")
+    rt_check.add_argument("--side-effect-level", default=None, dest="side_effect_level")
+    rt_check.add_argument("--human-approved", action="store_true", dest="human_approved")
+    rt_check.add_argument("--output", choices=["table", "json"], default="table")
 
     capabilities = subparsers.add_parser("capabilities")
     cap_subparsers = capabilities.add_subparsers(dest="cap_command", required=True)
@@ -155,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     request_transition = request_subparsers.add_parser("transition")
     request_transition.add_argument("request_id")
-    request_transition.add_argument("--to", required=True, choices=REQUEST_STATUS_CHOICES[1:], dest="to_status")
+    request_transition.add_argument("--to", required=True, choices=REQUEST_STATUS_CHOICES[1:] + sorted(LIFECYCLE_ALIASES), dest="to_status")
     request_transition.add_argument("--reason", required=True)
     request_transition.add_argument("--output", choices=["table", "json"], default="table")
 
@@ -183,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     work_plan.add_argument("--repo", required=True, dest="repo_id")
     work_plan.add_argument("--branch", default=None)
     work_plan.add_argument("--assign", default=None, dest="assigned_agent_id")
+    work_plan.add_argument("--reviewer", default=None, dest="reviewer_agent_id")
     work_plan.add_argument("--sanitized-summary", default=None, dest="sanitized_summary")
     work_plan.add_argument("--output", choices=["table", "json"], default="table")
     work_impl = work_subparsers.add_parser("set-implementation-context")
@@ -206,9 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
     work_assign.add_argument("--output", choices=["table", "json"], default="table")
     work_transition = work_subparsers.add_parser("transition")
     work_transition.add_argument("request_id")
-    work_transition.add_argument("--to", required=True, choices=REQUEST_STATUS_CHOICES[1:], dest="to_status")
+    work_transition.add_argument("--to", required=True, choices=REQUEST_STATUS_CHOICES[1:] + sorted(LIFECYCLE_ALIASES), dest="to_status")
     work_transition.add_argument("--reason", required=True)
     work_transition.add_argument("--override", action="store_true")
+    work_transition.add_argument("--approved-by", default=None, dest="approved_by", help="second sw-techlead/nexus approver required for manual override")
     work_transition.add_argument("--output", choices=["table", "json"], default="table")
     work_ev = work_subparsers.add_parser("submit-evidence")
     work_ev.add_argument("request_id")
@@ -245,6 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     gh_status = github_subparsers.add_parser("status")
     gh_status.add_argument("request_id")
     gh_status.add_argument("--output", choices=["table", "json"], default="table")
+    gh_alerts = github_subparsers.add_parser("alerts")
+    gh_alerts.add_argument("--all", action="store_true", dest="include_resolved")
+    gh_alerts.add_argument("--limit", type=int, default=50)
+    gh_alerts.add_argument("--output", choices=["table", "json"], default="table")
     gh_sync = github_subparsers.add_parser("sync")
     gh_sync.add_argument("request_id")
     gh_sync.add_argument("--output", choices=["table", "json"], default="table")
@@ -289,6 +350,8 @@ def run(
         args = parser.parse_args(argv)
         if args.command == "auth":
             return _run_auth(args, api=api, sessions=sessions, env=env, out=out)
+        if args.command == "rotate-token":
+            return _run_rotate_token(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "context":
             return _run_context(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "systems":
@@ -297,6 +360,10 @@ def run(
             return _run_goals(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "scopes":
             return _run_scopes(args, api=api, sessions=sessions, env=env, out=out)
+        if args.command == "events":
+            return _run_events(args, api=api, sessions=sessions, env=env, out=out)
+        if args.command == "db":
+            return _run_db(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "runtime-tools":
             return _run_runtime_tools(args, api=api, sessions=sessions, env=env, out=out)
         if args.command == "capabilities":
@@ -324,6 +391,17 @@ def _run_auth(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStor
     auth_response = api.auth(agent_token=token)
     sessions.save_auth_response(auth_response)
     _emit_auth(out=out, output=args.output, payload=auth_response)
+    return EXIT_SUCCESS
+
+
+def _normalize_lifecycle_status(value: str) -> str:
+    return LIFECYCLE_ALIASES.get(value, value)
+
+
+def _run_rotate_token(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, env: Mapping[str, str], out: TextIO) -> int:
+    session = _load_session_for_command(api=api, sessions=sessions, env=env)
+    payload = api.rotate_agent_token(session=session, agent_id=args.agent_id, new_token=args.new_token)
+    _emit_simple_result(out=out, output=args.output, payload=payload)
     return EXIT_SUCCESS
 
 
@@ -424,7 +502,39 @@ def _run_scopes(
         payload = api.effective_scopes(session=session)
         _emit_scopes(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
+    if args.scopes_command == "lease":
+        payload = api.create_scope_lease(session=session, agent_id=args.agent_id, scope=args.scope, system_id=args.system_id, resource_pattern=args.resource_pattern, request_id=args.request_id, reason=args.reason, ttl_minutes=args.ttl_minutes, approved_by=args.approved_by)
+        _emit_simple_result(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    if args.scopes_command == "leases":
+        payload = api.list_scope_leases(session=session, agent_id=args.agent_id, active_only=not args.include_inactive)
+        _emit_scope_leases(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    if args.scopes_command == "revoke-lease":
+        payload = api.revoke_scope_lease(session=session, lease_id=args.lease_id, reason=args.reason)
+        _emit_simple_result(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
     raise NexusError("NX-VAL-001", "unknown scopes command")
+
+
+def _run_events(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, env: Mapping[str, str], out: TextIO) -> int:
+    session = _load_session_for_command(api=api, sessions=sessions, env=env)
+    payload = api.event_log(session=session, target_type=args.target_type, target_id=args.target_id, limit=args.limit)
+    _emit_events(out=out, output=args.output, payload=payload)
+    return EXIT_SUCCESS
+
+
+def _run_db(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStore, env: Mapping[str, str], out: TextIO) -> int:
+    session = _load_session_for_command(api=api, sessions=sessions, env=env)
+    if args.db_command == "backup":
+        payload = api.db_backup(session=session, backup_path=args.backup_path)
+        _emit_simple_result(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    if args.db_command == "restore-check":
+        payload = api.db_restore_check(session=session, backup_path=args.backup_path)
+        _emit_simple_result(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    raise NexusError("NX-VAL-001", "unknown db command")
 
 
 def _run_runtime_tools(
@@ -443,6 +553,10 @@ def _run_runtime_tools(
     if args.runtime_tools_command == "show":
         payload = api.show_runtime_tool(session=session, tool_id=args.tool_id)
         _emit_runtime_tool_show(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    if args.runtime_tools_command == "check":
+        payload = api.runtime_tool_check(session=session, tool_id=args.tool_id, request_id=args.request_id, side_effect_level=args.side_effect_level, human_approved=args.human_approved)
+        _emit_simple_result(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     raise NexusError("NX-VAL-001", "unknown runtime-tools command")
 
@@ -539,7 +653,7 @@ def _run_request(
         payload = api.transition_request(
             session=session,
             request_id=args.request_id,
-            to=args.to_status,
+            to=_normalize_lifecycle_status(args.to_status),
             reason=reason,
         )
         _emit_request_transition(out=out, output=args.output, payload=payload)
@@ -631,7 +745,7 @@ def _run_work(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStor
         _emit_work_show(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     if args.work_command == "plan":
-        payload = api.plan_work(session=session, request_id=args.request_id, repo_id=args.repo_id, branch=args.branch, assigned_agent_id=args.assigned_agent_id, sanitized_summary=args.sanitized_summary)
+        payload = api.plan_work(session=session, request_id=args.request_id, repo_id=args.repo_id, branch=args.branch, assigned_agent_id=args.assigned_agent_id, reviewer_agent_id=args.reviewer_agent_id, sanitized_summary=args.sanitized_summary)
         _emit_work_show(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     if args.work_command == "set-implementation-context":
@@ -648,7 +762,7 @@ def _run_work(args: argparse.Namespace, *, api: ApiClient, sessions: SessionStor
         _emit_work_show(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     if args.work_command == "transition":
-        payload = api.transition_work(session=session, request_id=args.request_id, to=args.to_status, reason=_require_text(args.reason, field="reason"), override=bool(args.override))
+        payload = api.transition_work(session=session, request_id=args.request_id, to=_normalize_lifecycle_status(args.to_status), reason=_require_text(args.reason, field="reason"), override=bool(args.override), approved_by=args.approved_by)
         _emit_request_transition(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     if args.work_command == "submit-evidence":
@@ -681,6 +795,10 @@ def _run_github(args: argparse.Namespace, *, api: ApiClient, sessions: SessionSt
     if args.github_command == "status":
         payload = api.github_status(session=session, request_id=args.request_id)
         _emit_github_result(out=out, output=args.output, payload=payload)
+        return EXIT_SUCCESS
+    if args.github_command == "alerts":
+        payload = api.github_alerts(session=session, unresolved_only=not args.include_resolved, limit=args.limit)
+        _emit_github_alerts(out=out, output=args.output, payload=payload)
         return EXIT_SUCCESS
     if args.github_command == "sync":
         payload = api.github_sync(session=session, request_id=args.request_id)
@@ -743,6 +861,15 @@ def _build_implementation_context_from_args(args: argparse.Namespace) -> dict:
     if not context:
         raise NexusError("NX-VAL-001", "missing implementation context data")
     return context
+
+
+def _emit_github_alerts(*, out: TextIO, output: str, payload: dict) -> None:
+    alerts = payload.get("alerts", [])
+    if output == "json":
+        write_json(out, payload)
+        return
+    rows = [[item.get("alert_id", ""), item.get("severity", ""), item.get("kind", ""), item.get("request_id", ""), item.get("message", ""), item.get("created_at", "")] for item in alerts]
+    write_table(out, ["alert_id", "severity", "kind", "request_id", "message", "created_at"], rows)
 
 
 def _emit_auth(*, out: TextIO, output: str, payload: dict) -> None:
@@ -921,8 +1048,8 @@ def _emit_work_list(*, out: TextIO, output: str, payload: dict) -> None:
     rows = []
     for w in work:
         pr = ((w.get("github") or {}).get("pull_request") or {})
-        rows.append([w.get("request_id", ""), w.get("status", ""), w.get("target_repo_id", ""), w.get("assigned_agent_id", ""), w.get("branch", ""), pr.get("url", "")])
-    write_table(out, ["request_id", "status", "repo", "assigned", "branch", "pr"], rows)
+        rows.append([w.get("request_id", ""), w.get("status", ""), w.get("target_repo_id", ""), w.get("assigned_agent_id", ""), w.get("reviewer_agent_id", ""), w.get("branch", ""), pr.get("url", "")])
+    write_table(out, ["request_id", "status", "repo", "builder", "reviewer", "branch", "pr"], rows)
 
 
 def _emit_work_show(*, out: TextIO, output: str, payload: dict) -> None:
@@ -939,6 +1066,7 @@ def _emit_work_show(*, out: TextIO, output: str, payload: dict) -> None:
         ("acceptance_criteria", criteria_display),
         ("target_repo_id", str(payload.get("target_repo_id", ""))),
         ("assigned_agent_id", str(payload.get("assigned_agent_id", ""))),
+        ("reviewer_agent_id", str(payload.get("reviewer_agent_id", ""))),
         ("branch", str(payload.get("branch", ""))),
         ("github_issue", str(((payload.get("github") or {}).get("issue") or {}).get("url", ""))),
         ("github_pr", str(((payload.get("github") or {}).get("pull_request") or {}).get("url", ""))),
@@ -956,8 +1084,8 @@ def _emit_reviews_list(*, out: TextIO, output: str, payload: dict) -> None:
     if output == "json":
         write_json(out, payload if isinstance(payload, dict) else {"reviews": reviews})
         return
-    rows = [[r.get("request_id", ""), r.get("status", ""), r.get("target_repo_id", ""), (((r.get("github") or {}).get("pull_request") or {}).get("url", "")), r.get("assigned_agent_id", "")] for r in reviews]
-    write_table(out, ["request_id", "status", "repo", "pr", "assigned"], rows)
+    rows = [[r.get("request_id", ""), r.get("status", ""), r.get("target_repo_id", ""), (((r.get("github") or {}).get("pull_request") or {}).get("url", "")), r.get("assigned_agent_id", ""), r.get("reviewer_agent_id", "")] for r in reviews]
+    write_table(out, ["request_id", "status", "repo", "pr", "builder", "reviewer"], rows)
 
 
 def _emit_github_result(*, out: TextIO, output: str, payload: dict) -> None:
@@ -1139,6 +1267,24 @@ def _emit_scopes(*, out: TextIO, output: str, payload: dict) -> None:
             str(item.get("resource_pattern", "*")),
         ])
     write_table(out, ["agent_id", "role", "system_id", "scope", "resource"], rows)
+
+
+def _emit_scope_leases(*, out: TextIO, output: str, payload: dict) -> None:
+    leases = payload.get("leases", [])
+    if output == "json":
+        write_json(out, payload)
+        return
+    rows = [[item.get("lease_id", ""), item.get("agent_id", ""), item.get("system_id", ""), item.get("scope", ""), item.get("resource_pattern", ""), item.get("expires_at", ""), item.get("revoked_at", "")] for item in leases]
+    write_table(out, ["lease_id", "agent_id", "system_id", "scope", "resource", "expires_at", "revoked_at"], rows)
+
+
+def _emit_events(*, out: TextIO, output: str, payload: dict) -> None:
+    events = payload.get("events", [])
+    if output == "json":
+        write_json(out, payload)
+        return
+    rows = [[item.get("event_id", ""), item.get("event_type", ""), item.get("actor_agent_id", ""), item.get("target_type", ""), item.get("target_id", ""), item.get("created_at", "")] for item in events]
+    write_table(out, ["event_id", "event_type", "actor", "target_type", "target_id", "created_at"], rows)
 
 
 def _emit_runtime_tools_list(*, out: TextIO, output: str, payload: dict) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -7,6 +9,8 @@ from pathlib import Path
 from nexusctl.cli import run
 
 
+
+pytestmark = pytest.mark.unit
 def _write_active_session(agent_dir: Path, *, role: str = "trading-strategist") -> None:
     session_dir = agent_dir / ".nexusctl" / "sessions"
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -23,8 +27,8 @@ def _write_active_session(agent_dir: Path, *, role: str = "trading-strategist") 
     (session_dir / "current.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_validation_error_when_token_missing(cli_env):
-    rc = run(["auth"], env=cli_env)
+def test_validation_error_when_token_missing(agent_env):
+    rc = run(["auth"], env=agent_env)
     assert rc == 2
 
 
@@ -41,14 +45,22 @@ def test_auth_uses_seed_token_for_openclaw_agent_id(cli_env, tmp_path):
     assert rc == 0
 
 
-def test_validation_error_for_invalid_capability_id(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]))
-    rc = run(["capabilities", "show", "invalid-id"], env=cli_env)
+
+
+def test_validation_error_for_invalid_timeout_env(agent_env):
+    env = dict(agent_env)
+    env["NEXUSCTL_TIMEOUT_SECONDS"] = "0"
+    rc = run(["auth", "--agent-token", "tok_techlead"], env=env)
+    assert rc == 2
+
+def test_validation_error_for_invalid_capability_id(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]))
+    rc = run(["capabilities", "show", "invalid-id"], env=agent_env)
     assert rc == 2
 
 
-def test_permission_denied_for_non_techlead_set_status(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
+def test_permission_denied_for_non_techlead_set_status(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
     rc = run(
         [
             "capabilities",
@@ -59,13 +71,13 @@ def test_permission_denied_for_non_techlead_set_status(cli_env):
             "--reason",
             "All requirements verified and evidence linked.",
         ],
-        env=cli_env,
+        env=agent_env,
     )
     assert rc == 4
 
 
-def test_precondition_error_for_short_reason(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-techlead")
+def test_precondition_error_for_short_reason(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]), role="sw-techlead")
     rc = run(
         [
             "capabilities",
@@ -76,24 +88,24 @@ def test_precondition_error_for_short_reason(cli_env):
             "--reason",
             "too short",
         ],
-        env=cli_env,
+        env=agent_env,
     )
     assert rc == 2
 
 
-def test_precondition_error_for_missing_session(cli_env):
-    rc = run(["capabilities", "list"], env=cli_env)
+def test_precondition_error_for_missing_session(agent_env):
+    rc = run(["capabilities", "list"], env=agent_env)
     assert rc == 6
 
 
-def test_validation_error_for_capabilities_domain_override(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]))
-    rc = run(["capabilities", "list", "--domain", "Trading"], env=cli_env)
+def test_validation_error_for_capabilities_domain_override(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]))
+    rc = run(["capabilities", "list", "--domain", "Trading"], env=agent_env)
     assert rc == 2
 
 
-def test_validation_error_for_request_create_missing_acceptance_criteria(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="trading-strategist")
+def test_validation_error_for_request_create_missing_acceptance_criteria(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]), role="trading-strategist")
     rc = run(
         [
             "request",
@@ -113,13 +125,13 @@ def test_validation_error_for_request_create_missing_acceptance_criteria(cli_env
             "--goal-ref",
             "trading-goal://risk/limit-hard-stop",
         ],
-        env=cli_env,
+        env=agent_env,
     )
     assert rc == 2
 
 
-def test_permission_denied_for_non_trading_strategist_request_create(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
+def test_permission_denied_for_non_trading_strategist_request_create(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
     rc = run(
         [
             "request",
@@ -143,17 +155,17 @@ def test_permission_denied_for_non_trading_strategist_request_create(cli_env):
             "--output",
             "json",
         ],
-        env=cli_env,
+        env=agent_env,
     )
     assert rc == 4
 
 
-def test_builder_cannot_run_global_github_repo_sync(cli_env):
-    _write_active_session(Path(cli_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
-    rc = run(["github", "repos", "sync", "--output", "json"], env=cli_env)
+def test_builder_cannot_run_global_github_repo_sync(agent_env):
+    _write_active_session(Path(agent_env["NEXUSCTL_AGENT_DIR"]), role="sw-builder")
+    rc = run(["github", "repos", "sync", "--output", "json"], env=agent_env)
     assert rc == 4
 
 
-def test_removed_request_command_is_not_supported_after_v2_cutoff(cli_env):
-    rc = run(["request", "submit"], env=cli_env)
+def test_removed_request_command_is_not_supported_after_v2_cutoff(agent_env):
+    rc = run(["request", "submit"], env=agent_env)
     assert rc == 2

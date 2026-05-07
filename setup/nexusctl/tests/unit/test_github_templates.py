@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from nexusctl.backend.integrations.github_templates import render_issue_body
 
 
+
+pytestmark = pytest.mark.unit
 def test_issue_template_is_sanitized_and_structured():
     body = render_issue_body(
         request={"request_id": "REQ-123", "sanitized_summary": "Implement deterministic checker", "objective": "secret domain objective", "branch": "feature/req-123", "acceptance_criteria": ["AC1"]},

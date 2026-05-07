@@ -16,11 +16,11 @@ Required fields:
 - `priority`: `P0`, `P1`, `P2`, or `P3`
 - `goal_ref`
 
-Deterministic identity key: `objective + missing_capability + goal_ref`.
+Deterministic identity key: `objective + missing_capability + goal_ref`. Mutable details such as business impact, priority and acceptance criteria update the existing request instead of changing identity.
 
 ## Validation
 
-Reject or return to draft when any required field is missing, risk/priority is invalid, acceptance criteria are not testable, the request is not a software capability gap, or the referenced goal cannot be resolved.
+Reject or return to draft when any required field is missing, risk/priority is invalid, acceptance criteria are not testable, the request is not a software capability gap, or the referenced `goal_ref` cannot be resolved through Nexus goal aliases.
 
 ## Create or Submit
 

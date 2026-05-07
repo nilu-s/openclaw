@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from nexusctl.backend.integrations.github import derive_checks_state
 
 
+
+pytestmark = pytest.mark.unit
 def test_checks_state_failing_wins():
     assert derive_checks_state({"check_runs": [{"status": "completed", "conclusion": "failure"}]}, {"state": "success"}) == "failing"
 

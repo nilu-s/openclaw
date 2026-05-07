@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -7,6 +9,8 @@ from pathlib import Path
 from nexusctl.session import SessionStore
 
 
+
+pytestmark = pytest.mark.unit
 def test_session_store_writes_restrictive_file_permissions(monkeypatch, tmp_path):
     calls: list[int] = []
 

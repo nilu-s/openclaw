@@ -1,4 +1,5 @@
-FROM ghcr.io/openclaw/openclaw:latest
+ARG OPENCLAW_BASE_IMAGE
+FROM ${OPENCLAW_BASE_IMAGE}
 
 USER root
 

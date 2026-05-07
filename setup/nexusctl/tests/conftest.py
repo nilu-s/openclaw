@@ -8,6 +8,7 @@ import pytest
 
 from nexusctl.backend.server import BackendConfig, RunningServer, start_server
 from nexusctl.backend.storage import initialize_database, seed_mvp_data
+import nexusctl.backend.storage as storage_module
 
 
 TEST_SEED_TOKENS = {
@@ -30,7 +31,7 @@ class BackendServer:
     _running: RunningServer
 
     def stop(self) -> None:
-        self._running.stop()
+        self._running.stop(timeout_seconds=1.0)
 
     def execute(self, sql: str, params: tuple = ()) -> None:
         conn = sqlite3.connect(self.db_path)
@@ -49,6 +50,12 @@ class BackendServer:
             conn.close()
 
 
+@pytest.fixture(autouse=True)
+def fast_test_pbkdf2(monkeypatch):
+    # Keep production PBKDF2 strong while making unit/integration tests deterministic and fast.
+    monkeypatch.setattr(storage_module, "_PBKDF2_ITERATIONS", 2_000)
+
+
 @pytest.fixture()
 def backend_server(tmp_path: Path) -> BackendServer:
     db_path = tmp_path / "nexusctl.sqlite3"
@@ -64,10 +71,27 @@ def backend_server(tmp_path: Path) -> BackendServer:
 
 
 @pytest.fixture()
+def agent_env(tmp_path: Path) -> dict[str, str]:
+    """CLI environment for parser/session tests that do not need a live server.
+
+    Keeping this separate from cli_env avoids starting an embedded HTTP server
+    for negative-path unit tests that fail before any network request is made.
+    """
+    agent_dir = tmp_path / "agents" / "sw-techlead-01" / "agent"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "NEXUSCTL_API_BASE_URL": "http://127.0.0.1:9",
+        "NEXUSCTL_AGENT_DIR": str(agent_dir),
+    }
+
+
+@pytest.fixture()
 def cli_env(tmp_path: Path, backend_server: BackendServer) -> dict[str, str]:
     agent_dir = tmp_path / "agents" / "sw-techlead-01" / "agent"
     agent_dir.mkdir(parents=True, exist_ok=True)
     return {
         "NEXUSCTL_API_BASE_URL": backend_server.base_url,
         "NEXUSCTL_AGENT_DIR": str(agent_dir),
+        "NEXUSCTL_TIMEOUT_SECONDS": "2",
+        "NEXUSCTL_AUTH_TIMEOUT_SECONDS": "2",
     }

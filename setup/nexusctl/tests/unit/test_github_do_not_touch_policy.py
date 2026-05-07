@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from nexusctl.backend.integrations.github import evaluate_changed_files_policy
 
 
+
+pytestmark = pytest.mark.unit
 def test_do_not_touch_policy_detects_globs_and_exact_paths():
     result = evaluate_changed_files_policy(
         ["src/trading_engine/execution/live_orders.py", "tests/risk/test_check_order.py", "secrets/prod.env"],

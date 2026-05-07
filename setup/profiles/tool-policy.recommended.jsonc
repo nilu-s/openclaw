@@ -1,12 +1,17 @@
 {
-  // Copy relevant snippets into openclaw.json only after schema validation.
-  "global": {
-    "tools": { "profile": "coding" }
+  "defaults": {
+    "tools": { "profile": "read-only" }
   },
   "agents": {
-    "main": { "tools": { "profile": "coding", "alsoAllow": ["agents_list"] } },
-    "nexus": { "tools": { "profile": "coding", "alsoAllow": ["agents_list"] } },
-    "platform-optimizer": { "tools": { "profile": "coding", "alsoAllow": ["gateway", "agents_list"] } },
-    "specialists": { "tools": { "profile": "coding" } }
+    "main": { "tools": { "profile": "read-only", "alsoAllow": ["agents_list"], "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "nexus": { "tools": { "profile": "read-only", "alsoAllow": ["agents_list"], "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "platform-optimizer": { "tools": { "profile": "coding", "alsoAllow": ["gateway", "agents_list"], "denyProtectedPaths": ["**/.env", "**/.env.*", "**/*secret*", "**/*credential*"] } },
+    "sw-architect": { "tools": { "profile": "read-only", "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "sw-techlead": { "tools": { "profile": "coding", "denyProtectedPaths": ["**/.env", "**/.env.*", "**/*secret*", "**/*credential*"] } },
+    "sw-builder": { "tools": { "profile": "coding", "denyProtectedPaths": ["**/.env", "**/.env.*", "**/*secret*", "**/*credential*"] } },
+    "sw-reviewer": { "tools": { "profile": "read-only", "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "trading-strategist": { "tools": { "profile": "read-only", "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "trading-analyst": { "tools": { "profile": "read-only", "denyMutatingFilesystem": true, "denyShellExec": true } },
+    "trading-sentinel": { "tools": { "profile": "read-only", "denyMutatingFilesystem": true, "denyShellExec": true } }
   }
 }

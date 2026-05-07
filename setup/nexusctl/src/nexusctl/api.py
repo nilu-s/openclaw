@@ -40,8 +40,21 @@ def _is_loopback_hostname(hostname: str | None) -> bool:
         return bool(addresses) and all(addr.is_loopback for addr in addresses)
 
 
+def _float_from_env(env: Mapping[str, str], name: str, default: float) -> float:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise NexusError("NX-VAL-001", f"{name} must be a number of seconds")
+    if value <= 0:
+        raise NexusError("NX-VAL-001", f"{name} must be greater than zero")
+    return value
+
+
 class ApiClient:
-    def __init__(self, base_url: str, timeout_seconds: int = 5, auth_timeout_seconds: int = 8):
+    def __init__(self, base_url: str, timeout_seconds: float = 5.0, auth_timeout_seconds: float = 8.0):
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._auth_timeout_seconds = auth_timeout_seconds
@@ -55,12 +68,21 @@ class ApiClient:
         allow_insecure_remote = _is_truthy(env.get("NEXUSCTL_ALLOW_INSECURE_REMOTE"))
         if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname) and not allow_insecure_remote:
             raise NexusError("NX-VAL-001", "insecure http base URL is only allowed for loopback hosts")
-        return cls(base_url=base_url)
+        return cls(
+            base_url=base_url,
+            timeout_seconds=_float_from_env(env, "NEXUSCTL_TIMEOUT_SECONDS", 5.0),
+            auth_timeout_seconds=_float_from_env(env, "NEXUSCTL_AUTH_TIMEOUT_SECONDS", 8.0),
+        )
 
     def auth(self, *, agent_token: str) -> dict[str, Any]:
         payload: dict[str, Any] = {"agent_token": agent_token}
         return self._request("POST", "/v1/nexus/auth", payload=payload, timeout=self._auth_timeout_seconds)
 
+    def rotate_agent_token(self, *, session: Session, agent_id: str, new_token: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"agent_id": agent_id}
+        if new_token:
+            payload["new_token"] = new_token
+        return self._request("POST", "/v1/nexus/agents/rotate-token", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
 
     def list_systems(self, *, session: Session, status: str = "all") -> dict[str, Any]:
         return self._request(
@@ -174,6 +196,49 @@ class ApiClient:
             retry_once=True,
         )
 
+
+    def create_scope_lease(self, *, session: Session, agent_id: str, scope: str, system_id: str = "*", resource_pattern: str = "*", request_id: str | None = None, reason: str, ttl_minutes: int = 120, approved_by: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"agent_id": agent_id, "scope": scope, "system_id": system_id, "resource_pattern": resource_pattern, "reason": reason, "ttl_minutes": ttl_minutes}
+        if request_id:
+            payload["request_id"] = request_id
+        if approved_by:
+            payload["approved_by"] = approved_by
+        return self._request("POST", "/v1/nexus/scopes/leases", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def list_scope_leases(self, *, session: Session, agent_id: str | None = None, active_only: bool = True) -> dict[str, Any]:
+        query = {"active": "1" if active_only else "0"}
+        if agent_id:
+            query["agent_id"] = agent_id
+        return self._request("GET", "/v1/nexus/scopes/leases", query=query, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
+
+    def revoke_scope_lease(self, *, session: Session, lease_id: str, reason: str) -> dict[str, Any]:
+        return self._request("POST", f"/v1/nexus/scopes/leases/{lease_id}/revoke", payload={"reason": reason}, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def event_log(self, *, session: Session, target_type: str | None = None, target_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+        query = {"limit": str(limit)}
+        if target_type:
+            query["target_type"] = target_type
+        if target_id:
+            query["target_id"] = target_id
+        return self._request("GET", "/v1/nexus/events", query=query, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
+
+    def db_backup(self, *, session: Session, backup_path: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if backup_path:
+            payload["backup_path"] = backup_path
+        return self._request("POST", "/v1/nexus/db/backup", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def db_restore_check(self, *, session: Session, backup_path: str) -> dict[str, Any]:
+        return self._request("POST", "/v1/nexus/db/restore-check", payload={"backup_path": backup_path}, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def runtime_tool_check(self, *, session: Session, tool_id: str, request_id: str | None = None, side_effect_level: str | None = None, human_approved: bool = False) -> dict[str, Any]:
+        payload: dict[str, Any] = {"human_approved": human_approved}
+        if request_id:
+            payload["request_id"] = request_id
+        if side_effect_level:
+            payload["side_effect_level"] = side_effect_level
+        return self._request("POST", f"/v1/nexus/runtime-tools/{tool_id}/guardrail", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
     def list_runtime_tools(self, *, session: Session, system_id: str | None = None, status: str = "all") -> dict[str, Any]:
         query = {"status": status}
         if system_id:
@@ -209,18 +274,32 @@ class ApiClient:
     def show_work(self, *, session: Session, request_id: str) -> dict[str, Any]:
         return self._request("GET", f"/v1/nexus/work/{request_id}", headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
 
-    def plan_work(self, *, session: Session, request_id: str, repo_id: str, branch: str | None = None, assigned_agent_id: str | None = None, sanitized_summary: str | None = None) -> dict[str, Any]:
+    def plan_work(self, *, session: Session, request_id: str, repo_id: str, branch: str | None = None, assigned_agent_id: str | None = None, reviewer_agent_id: str | None = None, sanitized_summary: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"repo_id": repo_id}
         if branch:
             payload["branch"] = branch
         if assigned_agent_id:
             payload["assigned_agent_id"] = assigned_agent_id
+        if reviewer_agent_id:
+            payload["reviewer_agent_id"] = reviewer_agent_id
         if sanitized_summary:
             payload["sanitized_summary"] = sanitized_summary
         return self._request("POST", f"/v1/nexus/work/{request_id}/plan", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
 
     def assign_work(self, *, session: Session, request_id: str, agent_id: str) -> dict[str, Any]:
         return self._request("POST", f"/v1/nexus/work/{request_id}/assign", payload={"agent_id": agent_id}, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def transition_work(self, *, session: Session, request_id: str, to: str, reason: str, override: bool = False, approved_by: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"to": to, "reason": reason, "override": override}
+        if approved_by:
+            payload["approved_by"] = approved_by
+        return self._request("POST", f"/v1/nexus/work/{request_id}/transition", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
+
+    def submit_work_evidence(self, *, session: Session, request_id: str, kind: str, ref: str | None, summary: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {"kind": kind, "summary": summary}
+        if ref:
+            payload["ref"] = ref
+        return self._request("POST", f"/v1/nexus/work/{request_id}/evidence", payload=payload, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=False)
 
     def set_implementation_context(self, *, session: Session, request_id: str, implementation_context: dict[str, Any]) -> dict[str, Any]:
         return self._request(
@@ -262,6 +341,9 @@ class ApiClient:
 
     def github_status(self, *, session: Session, request_id: str) -> dict[str, Any]:
         return self._request("GET", f"/v1/nexus/github/status/{request_id}", headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
+
+    def github_alerts(self, *, session: Session, unresolved_only: bool = True, limit: int = 50) -> dict[str, Any]:
+        return self._request("GET", "/v1/nexus/github/alerts", query={"unresolved": "1" if unresolved_only else "0", "limit": str(limit)}, headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
 
     def github_repos_list(self, *, session: Session) -> dict[str, Any]:
         return self._request("GET", "/v1/nexus/github/repositories", headers=self._session_headers(session), timeout=self._timeout_seconds, retry_once=True)
@@ -395,7 +477,7 @@ class ApiClient:
         payload: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         query: dict[str, str] | None = None,
-        timeout: int,
+        timeout: float,
         retry_once: bool = False,
     ) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
