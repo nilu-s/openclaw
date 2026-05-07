@@ -1,0 +1,18 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:9ad70f7aad15972c75253edc879d21a2b1f03cff4ed9750977a02d17a3fef222",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router",
+    "merge-applier",
+    "operator",
+    "platform-maintainer"
+  ],
+  "description": "Read Nexusctl status and identity context.",
+  "id": "nexusctl_status",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

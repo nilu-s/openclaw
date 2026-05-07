@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:df43996746ccc5624cc7a77ac298de0c8c3350f3fa9aa879ebfa1abb7c676a9c",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "trading-sentinel",
+  "domain": "trading",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_goal_ops",
+    "nexusctl_safety_veto"
+  ],
+  "source": "nexus/agents.yml"
+}

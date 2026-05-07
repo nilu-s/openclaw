@@ -1,0 +1,42 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:6719b407d620586ca29a18f061aaa1c76d8d90e797f54c432c82321191891ace",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-techlead",
+  "capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "policy.check",
+    "release.readiness",
+    "runtime.tool.invoke",
+    "schedule.run",
+    "system.status.read",
+    "work.assign",
+    "work.plan",
+    "work.read"
+  ],
+  "domain": "software",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "release.readiness",
+    "schedule.run",
+    "work.assign",
+    "work.plan"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "policy.check",
+    "runtime.tool.invoke",
+    "system.status.read",
+    "work.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "technical_governance",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

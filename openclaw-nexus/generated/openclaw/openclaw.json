@@ -1,0 +1,456 @@
+{
+  "_generated": {
+    "artifact_kind": "openclaw_config",
+    "checksum": "sha256:e3d56209204d7a6413aeeb68bfdd4d1588c6c5223df721bb1b5ef876306d7c4e",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agents": [
+    {
+      "agentDir": "generated/agents/control-router",
+      "capabilities": [
+        "domain.read",
+        "events.read",
+        "feature_request.create",
+        "feature_request.read",
+        "feature_request.route",
+        "feature_request.transition",
+        "github.check.sync",
+        "github.issue.sync",
+        "github.label.sync",
+        "github.pr.create",
+        "github.reconcile",
+        "github.repo.sync",
+        "github.webhook.verify",
+        "goal.read",
+        "policy.check",
+        "runtime.tool.invoke",
+        "schedule.read",
+        "schedule.run",
+        "scope.lease.grant",
+        "scope.lease.revoke",
+        "system.status.read",
+        "work.assign",
+        "work.read"
+      ],
+      "displayName": "Control Router Agent",
+      "domain": "control",
+      "id": "control-router",
+      "role": "control_router",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_github_projection",
+        "nexusctl_github_reconciliation",
+        "nexusctl_routing",
+        "nexusctl_scope_control",
+        "nexusctl_status"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/control-router"
+    },
+    {
+      "agentDir": "generated/agents/merge-applier",
+      "capabilities": [
+        "feature_request.read",
+        "github.label.sync",
+        "patch.read",
+        "policy.check",
+        "repo.apply",
+        "runtime.tool.invoke",
+        "system.status.read",
+        "work.read"
+      ],
+      "displayName": "Merge Applier Agent",
+      "domain": "control",
+      "id": "merge-applier",
+      "role": "merge_applier",
+      "skills": [
+        "nexusctl_github_projection",
+        "nexusctl_merge_apply",
+        "nexusctl_status"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/merge-applier"
+    },
+    {
+      "agentDir": "generated/agents/operator",
+      "capabilities": [
+        "domain.read",
+        "events.read",
+        "feature_request.read",
+        "goal.read",
+        "runtime.tool.invoke",
+        "system.status.read"
+      ],
+      "displayName": "Operator Agent",
+      "domain": "control",
+      "id": "operator",
+      "role": "operator",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_status"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/operator"
+    },
+    {
+      "agentDir": "generated/agents/platform-maintainer",
+      "capabilities": [
+        "backup.create",
+        "domain.read",
+        "events.read",
+        "runtime.generate",
+        "runtime.tool.invoke",
+        "runtime.validate",
+        "schedule.read",
+        "schedule.run",
+        "system.status.read"
+      ],
+      "displayName": "Platform Maintainer Agent",
+      "domain": "platform",
+      "id": "platform-maintainer",
+      "role": "runtime_maintainer",
+      "skills": [
+        "nexusctl_status",
+        "openclaw_generation",
+        "runtime_integrity"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/platform-maintainer"
+    },
+    {
+      "agentDir": "generated/agents/software-architect",
+      "capabilities": [
+        "design.propose",
+        "feature_request.read",
+        "goal.read",
+        "policy.check",
+        "runtime.tool.invoke",
+        "scope.request",
+        "system.status.read",
+        "work.plan",
+        "work.read"
+      ],
+      "displayName": "Software Architect Agent",
+      "domain": "software",
+      "id": "software-architect",
+      "role": "technical_planner",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_work_planning"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/software-architect"
+    },
+    {
+      "agentDir": "generated/agents/software-builder",
+      "capabilities": [
+        "feature_request.read",
+        "patch.read",
+        "patch.submit",
+        "runtime.tool.invoke",
+        "system.status.read",
+        "work.read"
+      ],
+      "displayName": "Software Builder Agent",
+      "domain": "software",
+      "id": "software-builder",
+      "role": "patch_builder",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_patch_proposal"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/software-builder"
+    },
+    {
+      "agentDir": "generated/agents/software-reviewer",
+      "capabilities": [
+        "feature_request.read",
+        "patch.read",
+        "policy.check",
+        "review.approve",
+        "review.submit",
+        "runtime.tool.invoke",
+        "schedule.run",
+        "system.status.read",
+        "work.read"
+      ],
+      "displayName": "Software Reviewer Agent",
+      "domain": "software",
+      "id": "software-reviewer",
+      "role": "quality_reviewer",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_review"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/software-reviewer"
+    },
+    {
+      "agentDir": "generated/agents/software-techlead",
+      "capabilities": [
+        "feature_request.read",
+        "goal.read",
+        "policy.check",
+        "release.readiness",
+        "runtime.tool.invoke",
+        "schedule.run",
+        "system.status.read",
+        "work.assign",
+        "work.plan",
+        "work.read"
+      ],
+      "displayName": "Software Tech Lead Agent",
+      "domain": "software",
+      "id": "software-techlead",
+      "role": "technical_governance",
+      "skills": [
+        "nexusctl_feature_request_ops",
+        "nexusctl_work_planning"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/software-techlead"
+    },
+    {
+      "agentDir": "generated/agents/trading-analyst",
+      "capabilities": [
+        "evidence.add",
+        "feature_request.read",
+        "goal.evaluate",
+        "goal.measure",
+        "goal.read",
+        "runtime.tool.invoke",
+        "schedule.run",
+        "system.status.read"
+      ],
+      "displayName": "Trading Analyst Agent",
+      "domain": "trading",
+      "id": "trading-analyst",
+      "role": "measurement_analyst",
+      "skills": [
+        "nexusctl_goal_ops",
+        "trading_evidence"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/trading-analyst"
+    },
+    {
+      "agentDir": "generated/agents/trading-sentinel",
+      "capabilities": [
+        "feature_request.read",
+        "goal.read",
+        "runtime.tool.invoke",
+        "safety.veto",
+        "schedule.run",
+        "system.status.read",
+        "trading.risk.audit"
+      ],
+      "displayName": "Trading Sentinel Agent",
+      "domain": "trading",
+      "id": "trading-sentinel",
+      "role": "risk_sentinel",
+      "skills": [
+        "nexusctl_goal_ops",
+        "nexusctl_safety_veto"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/trading-sentinel"
+    },
+    {
+      "agentDir": "generated/agents/trading-strategist",
+      "capabilities": [
+        "acceptance.submit",
+        "feature_request.create",
+        "feature_request.read",
+        "goal.evaluate",
+        "goal.read",
+        "runtime.tool.invoke",
+        "schedule.run",
+        "system.status.read",
+        "trading.strategy.mutate"
+      ],
+      "displayName": "Trading Strategist Agent",
+      "domain": "trading",
+      "id": "trading-strategist",
+      "role": "strategy_owner",
+      "skills": [
+        "nexusctl_acceptance",
+        "nexusctl_feature_request_ops",
+        "nexusctl_goal_ops"
+      ],
+      "toolPolicy": {
+        "capabilitySource": "nexus/agents.yml",
+        "domainSource": "auth_token",
+        "githubDirectWrite": false,
+        "repoDirectApply": false
+      },
+      "workspace": "generated/workspaces/trading-strategist"
+    }
+  ],
+  "guardrails": {
+    "agents_have_direct_github_write_tokens": false,
+    "agents_may_edit_generated_runtime_config_directly": false,
+    "agents_may_edit_runtime_cronjobs_directly": false,
+    "agents_may_request_schedule_changes": true,
+    "agents_may_trigger_allowed_runs": true,
+    "autonomous_builder_cronjobs_allowed": false,
+    "cron_prompts_duplicate_standing_orders": false,
+    "cronjobs_mutated_by": "nexusctl_schedule_control_flow",
+    "generated_artifacts_are_manual_source_of_truth": false,
+    "generated_runtime_config_mutation": "nexusctl_generation_only",
+    "github_is_projection": true,
+    "runtime_cronjob_mutation": "nexusctl_schedule_control_flow_only",
+    "schedule_source_of_truth": "nexusctl"
+  },
+  "runtime": {
+    "configuration_source": "nexus/*.yml via nexusctl generation",
+    "generated": true,
+    "lifecycle_authority": false,
+    "name": "openclaw",
+    "source_of_truth": "nexusctl"
+  },
+  "schedules": [
+    {
+      "agent": "control-router",
+      "cron": "*/30 * * * *",
+      "cronArtifact": "generated/openclaw/schedules/control_router_domain_inbox_triage.json",
+      "domain": "control",
+      "enabled": true,
+      "id": "control_router_domain_inbox_triage",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "control.control_router_domain_inbox_triage"
+    },
+    {
+      "agent": "control-router",
+      "cron": "*/15 * * * *",
+      "cronArtifact": "generated/openclaw/schedules/control_router_scope_expiry_guard.json",
+      "domain": "control",
+      "enabled": true,
+      "id": "control_router_scope_expiry_guard",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "control.control_router_scope_expiry_guard"
+    },
+    {
+      "agent": "platform-maintainer",
+      "cron": "15 2 * * *",
+      "cronArtifact": "generated/openclaw/schedules/platform_db_backup.json",
+      "domain": "platform",
+      "enabled": true,
+      "id": "platform_db_backup",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "platform.platform_db_backup"
+    },
+    {
+      "agent": "platform-maintainer",
+      "cron": "*/20 * * * *",
+      "cronArtifact": "generated/openclaw/schedules/platform_generated_runtime_drift.json",
+      "domain": "platform",
+      "enabled": true,
+      "id": "platform_generated_runtime_drift",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "platform.platform_generated_runtime_drift"
+    },
+    {
+      "agent": "software-techlead",
+      "cron": "0 9 * * 1-5",
+      "cronArtifact": "generated/openclaw/schedules/software_release_readiness.json",
+      "domain": "software",
+      "enabled": true,
+      "id": "software_release_readiness",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "software.software_release_readiness"
+    },
+    {
+      "agent": "software-reviewer",
+      "cron": "0 */4 * * *",
+      "cronArtifact": "generated/openclaw/schedules/software_review_queue_check.json",
+      "domain": "software",
+      "enabled": true,
+      "id": "software_review_queue_check",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "software.software_review_queue_check"
+    },
+    {
+      "agent": "trading-strategist",
+      "cron": "0 7 * * 1-5",
+      "cronArtifact": "generated/openclaw/schedules/trading_feature_need_detection.json",
+      "domain": "trading",
+      "enabled": true,
+      "id": "trading_feature_need_detection",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "trading.trading_feature_need_detection"
+    },
+    {
+      "agent": "trading-analyst",
+      "cron": "30 6 * * *",
+      "cronArtifact": "generated/openclaw/schedules/trading_goal_daily_evaluation.json",
+      "domain": "trading",
+      "enabled": true,
+      "id": "trading_goal_daily_evaluation",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "trading.trading_goal_daily_evaluation"
+    },
+    {
+      "agent": "trading-sentinel",
+      "cron": "45 6 * * *",
+      "cronArtifact": "generated/openclaw/schedules/trading_risk_daily_audit.json",
+      "domain": "trading",
+      "enabled": true,
+      "id": "trading_risk_daily_audit",
+      "mutationBoundary": "nexusctl_schedule_control_flow_only",
+      "standing_order": "trading.trading_risk_daily_audit"
+    }
+  ],
+  "schema_version": 1
+}

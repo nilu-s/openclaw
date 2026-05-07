@@ -1,0 +1,40 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:fb9191ed2910c9c903f3cd54cf062fe7eea3e4182bb95589aca9f7dd143bad78",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-reviewer",
+  "capabilities": [
+    "feature_request.read",
+    "patch.read",
+    "policy.check",
+    "review.approve",
+    "review.submit",
+    "runtime.tool.invoke",
+    "schedule.run",
+    "system.status.read",
+    "work.read"
+  ],
+  "domain": "software",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "review.approve",
+    "review.submit",
+    "schedule.run"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "patch.read",
+    "policy.check",
+    "runtime.tool.invoke",
+    "system.status.read",
+    "work.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "quality_reviewer",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

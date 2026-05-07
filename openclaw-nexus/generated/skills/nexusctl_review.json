@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:4c9bb6af00dce7ad011b4817cbd41e0b96ed81982c00373ddfcbbbbc4fbc22a7",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "software-reviewer"
+  ],
+  "description": "Submit technical review verdicts.",
+  "id": "nexusctl_review",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

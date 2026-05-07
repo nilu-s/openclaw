@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    NEXUSCTL_PROJECT_ROOT=/workspace \
+    NEXUSCTL_DB=/data/nexus.db
+
+WORKDIR /workspace
+
+RUN addgroup --system nexusctl \
+    && adduser --system --ingroup nexusctl --home /home/nexusctl nexusctl \
+    && mkdir -p /data /workspace /workspaces /repo-worktrees \
+    && chown -R nexusctl:nexusctl /data /workspace /workspaces /repo-worktrees /home/nexusctl
+
+COPY nexusctl/pyproject.toml /tmp/nexusctl/pyproject.toml
+COPY nexusctl/src /tmp/nexusctl/src
+RUN pip install /tmp/nexusctl && rm -rf /tmp/nexusctl
+
+COPY --chown=nexusctl:nexusctl nexus /workspace/nexus
+COPY --chown=nexusctl:nexusctl generated /workspace/generated
+COPY --chown=nexusctl:nexusctl scripts /workspace/scripts
+COPY --chown=nexusctl:nexusctl README.md /workspace/
+COPY --chown=nexusctl:nexusctl .chatgpt /workspace/.chatgpt
+
+USER nexusctl
+
+VOLUME ["/data", "/workspaces", "/repo-worktrees"]
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('NEXUSCTL_API_PORT', '8080'), timeout=3).read()" || exit 1
+
+ENTRYPOINT ["nexusctl"]
+CMD ["doctor", "--json"]

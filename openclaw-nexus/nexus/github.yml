@@ -1,0 +1,85 @@
+schema_version: 1
+github:
+  role: projection
+  source_of_truth: nexusctl
+  lifecycle_authority: false
+  write_actor: nexusctl_github_app
+  agents_have_direct_write_tokens: false
+  repositories:
+  - id: primary
+    owner: openclaw
+    name: openclaw-nexus
+    default_branch: main
+    visibility: private_or_internal
+  labels:
+  - name: nexus:id
+    description: Nexus entity ID label namespace
+  - name: domain:control
+    description: Control domain
+  - name: domain:platform
+    description: Platform domain
+  - name: domain:software
+    description: Software domain
+  - name: domain:trading
+    description: Trading domain
+  - name: target:software
+    description: Target software domain
+  - name: target:trading
+    description: Target trading domain
+  - name: status:proposed
+    description: Nexus proposed state
+  - name: status:routed
+    description: Nexus routed state
+  - name: status:in-progress
+    description: Nexus in-progress state
+  - name: status:blocked
+    description: Nexus blocked state
+  - name: status:accepted
+    description: Nexus accepted state
+  - name: status:merged
+    description: Nexus merged state
+  - name: gate:review-required
+    description: Software review required
+  - name: gate:acceptance-required
+    description: Business acceptance required
+  - name: gate:safety-veto
+    description: Safety veto present
+  - name: gate:review-approved
+    description: Technical review approved
+  - name: gate:review-changes-requested
+    description: Technical review requested changes or rejected the patch
+  - name: gate:acceptance-accepted
+    description: Business-domain acceptance passed
+  - name: gate:acceptance-rejected
+    description: Business-domain acceptance rejected the request
+  mappings:
+    feature_request:
+      github_type: issue
+      identity_label: nexus:<feature_request_id>
+      body_sections:
+      - summary
+      - source_domain
+      - target_domain
+      - goal
+      - acceptance_contract
+      - safety_contract
+    work_item:
+      github_type: branch
+      branch_pattern: nexus/<work_item_id>/<slug>
+    patch_proposal:
+      github_type: pull_request
+      identity_label: nexus:<patch_id>
+    review:
+      github_type: pull_request_review
+    policy_check:
+      github_type: check_run
+  workflows:
+  - id: validate-project
+    file: .github/workflows/validate-project.yml
+    required: true
+  - id: tests
+    file: .github/workflows/tests.yml
+    required: true
+  - id: nexus-policy-checks
+    file: .github/workflows/nexus-policy-checks.yml
+    required: true

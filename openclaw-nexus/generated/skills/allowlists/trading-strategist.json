@@ -1,0 +1,17 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:b9a70d3962936618105a8fc1ffdbda760b6ef3d71fc283623ac09c945a3fd0f9",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "trading-strategist",
+  "domain": "trading",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_acceptance",
+    "nexusctl_feature_request_ops",
+    "nexusctl_goal_ops"
+  ],
+  "source": "nexus/agents.yml"
+}

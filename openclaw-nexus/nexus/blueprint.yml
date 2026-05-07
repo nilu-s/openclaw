@@ -1,0 +1,88 @@
+project: openclaw-nexus
+architecture_version: mvp-hardened-v1
+design_source_of_truth: nexus/*.yml
+runtime_source_of_truth: nexus.db
+generated_runtime_root: generated/
+authority_contract:
+  authoritative_mutations: nexusctl_services_only
+  control_config_mutation: reviewed_repository_change_via_nexusctl_flow
+  control_store_mutation: nexusctl_app_services_only
+  generated_runtime_config_mutation: nexusctl_generation_only
+  schedule_cron_mutation: nexusctl_schedule_control_flow_only
+  agents_may:
+  - create_requests
+  - submit_patch_proposals
+  - trigger_allowed_schedule_runs
+  agents_may_not:
+  - mutate_control_config_directly
+  - mutate_control_store_directly
+  - edit_generated_runtime_config_directly
+  - change_runtime_cronjobs_directly
+authorities:
+  nexusctl:
+    role: source_of_truth
+    owns:
+    - domains
+    - goals
+    - metrics
+    - feature_requests
+    - scopes
+    - work
+    - reviews
+    - github_sync
+    - schedules
+    - events
+  openclaw:
+    role: runtime
+    lifecycle_authority: false
+    owns:
+    - agents
+    - workspaces
+    - skills
+    - cronjobs
+    - gateway
+    - sessions
+    configuration: generated_openclaw_runtime_config
+    generated_from: control_config_via_nexusctl
+    cronjobs_mutated_by: nexusctl_schedule_control_flow
+  github:
+    role: projection
+    lifecycle_authority: false
+    writes_performed_by: nexusctl_github_app
+files:
+  domains: nexus/domains.yml
+  agents: nexus/agents.yml
+  capabilities: nexus/capabilities.yml
+  goals: nexus/goals.yml
+  schedules: nexus/schedules.yml
+  github: nexus/github.yml
+  policies: nexus/policies.yml
+  standing_orders: nexus/standing-orders.yml
+agent_count: 10
+domains:
+- control
+- platform
+- software
+- trading
+- research
+runtime_artifact_policy:
+  generated_paths:
+  - generated/openclaw
+  - generated/agents
+  - generated/skills
+  manual_edits_allowed: false
+  future_checksum_required: true
+hard_invariants:
+- nexusctl_is_source_of_truth
+- github_is_projection
+- openclaw_runtime_is_generated
+- control_config_mutated_only_via_nexusctl_flow
+- control_store_mutated_only_via_nexusctl_services
+- generated_runtime_config_mutated_only_by_nexusctl_generation
+- schedules_mutated_only_via_nexusctl_control_flow
+- agent_domain_is_auth_derived
+- normal_agents_do_not_pass_domain_flags
+- no_direct_agent_github_write
+- no_direct_builder_repo_apply
+- cross_domain_work_uses_feature_requests
+- every_mutation_emits_append_only_event

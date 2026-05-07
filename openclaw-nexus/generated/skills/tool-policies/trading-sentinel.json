@@ -1,0 +1,36 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:4319a0c30cdc56b8ce3b421ab5dad93c51072b45b73a516afeb6a1e2d0880850",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "trading-sentinel",
+  "capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "safety.veto",
+    "schedule.run",
+    "system.status.read",
+    "trading.risk.audit"
+  ],
+  "domain": "trading",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "safety.veto",
+    "schedule.run",
+    "trading.risk.audit"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "system.status.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "risk_sentinel",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

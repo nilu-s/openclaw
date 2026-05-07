@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:3dfb456cf8663467188cb32d8ae330456e292cc07cffb5215d65e4cb0b4259a3",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "trading-analyst"
+  ],
+  "description": "Attach trading evidence, measurements, and backtest references.",
+  "id": "trading_evidence",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

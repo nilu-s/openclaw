@@ -1,0 +1,33 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:005ee396065ca1c584848dafcfc0db52877d2b668bbbcffcb9da536510c97c75",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "operator",
+  "capabilities": [
+    "domain.read",
+    "events.read",
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "system.status.read"
+  ],
+  "domain": "control",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [],
+  "read_only_capabilities": [
+    "domain.read",
+    "events.read",
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "system.status.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "operator",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

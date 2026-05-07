@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:ebd81345d36f4623cadcc3aafb96be5ff65a8a6a4a61c79fcfdea91ae82d21fd",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-builder",
+  "domain": "software",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_feature_request_ops",
+    "nexusctl_patch_proposal"
+  ],
+  "source": "nexus/agents.yml"
+}

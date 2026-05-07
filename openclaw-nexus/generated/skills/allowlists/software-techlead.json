@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:2ef3b71c61d5426473bc6f51f881f1372a69644b3e74a3348008ba08e70efa5f",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-techlead",
+  "domain": "software",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_feature_request_ops",
+    "nexusctl_work_planning"
+  ],
+  "source": "nexus/agents.yml"
+}

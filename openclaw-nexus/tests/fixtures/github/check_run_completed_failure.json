@@ -1,0 +1,25 @@
+{
+  "action": "completed",
+  "repository": {
+    "id": 987654321,
+    "name": "openclaw-nexus",
+    "full_name": "openclaw/openclaw-nexus",
+    "owner": {"login": "openclaw", "type": "Organization"},
+    "default_branch": "main"
+  },
+  "check_run": {
+    "id": 1234567890,
+    "node_id": "CR_kwDOFixture",
+    "name": "nexus/policy/fast",
+    "head_sha": "1111111111111111111111111111111111111111",
+    "status": "completed",
+    "conclusion": "failure",
+    "started_at": "2026-05-06T03:00:00Z",
+    "completed_at": "2026-05-06T03:01:00Z",
+    "pull_requests": [
+      {"number": 17, "head": {"sha": "1111111111111111111111111111111111111111"}}
+    ],
+    "app": {"id": 15368, "name": "GitHub Actions"}
+  },
+  "sender": {"login": "fixture-sender", "type": "User"}
+}

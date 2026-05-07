@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:378a54fbe838eb0bdb24c66c594e0a68ac98f113200cc612bda401d6880a8870",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router"
+  ],
+  "description": "Route requests and administer domain handoffs.",
+  "id": "nexusctl_routing",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

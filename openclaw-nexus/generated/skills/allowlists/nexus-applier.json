@@ -1,0 +1,17 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:3a1136cb9ae56c05d802e3c1c930799de286d27880596de53a5c6fe3ecd4ff5c",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "nexus-applier",
+  "domain": "control",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_github_projection",
+    "nexusctl_merge_apply",
+    "nexusctl_status"
+  ],
+  "source": "nexus/agents.yml"
+}

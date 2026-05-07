@@ -1,0 +1,38 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:7934daa93f62367f30bb52f5c7bdd6869f2f1eb5e010d891220dc29d8b2cbb0c",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "nexus-applier",
+  "capabilities": [
+    "feature_request.read",
+    "github.label.sync",
+    "patch.read",
+    "policy.check",
+    "repo.apply",
+    "runtime.tool.invoke",
+    "system.status.read",
+    "work.read"
+  ],
+  "domain": "control",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "github.label.sync",
+    "repo.apply"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "patch.read",
+    "policy.check",
+    "runtime.tool.invoke",
+    "system.status.read",
+    "work.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "merge_applier",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

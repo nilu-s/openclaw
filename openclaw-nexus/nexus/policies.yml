@@ -1,0 +1,88 @@
+schema_version: 1
+policy_mode: hard_fail_by_default
+rules:
+- id: agent_domain_is_auth_derived
+  severity: hard
+  description: Agent domain must be derived from the authenticated token; normal agents
+    may not pass --domain.
+- id: normal_agents_no_cross_domain_mutation
+  severity: hard
+  description: Only control-router capabilities may perform policy-limited cross-domain
+    routing mutation.
+- id: cross_domain_work_uses_feature_requests
+  severity: hard
+  description: Cross-domain needs must be expressed as Feature Requests.
+- id: trading_no_software_code_capabilities
+  severity: hard
+  deny_domains:
+  - trading
+  deny_capabilities:
+  - patch.submit
+  - github.pr.create
+  - repo.apply
+  - scope.lease.grant
+  - scope.lease.revoke
+  - review.submit
+  - review.approve
+- id: software_no_trading_strategy_mutation
+  severity: hard
+  deny_domains:
+  - software
+  deny_capabilities:
+  - trading.strategy.mutate
+  - acceptance.submit
+  - safety.veto
+- id: builder_no_repo_apply_or_review
+  severity: hard
+  deny_agents:
+  - software-builder
+  deny_capabilities:
+  - scope.lease.grant
+  - scope.lease.revoke
+  - review.submit
+  - review.approve
+  - repo.apply
+  - github.pr.create
+- id: github_projection_not_authority
+  severity: hard
+  description: GitHub mirrors nexusctl state and is not lifecycle authority.
+- id: github_writes_only_via_app
+  severity: hard
+  description: Only Nexusctl/GitHub App may create issues, branches, PRs, checks,
+    labels, and merges.
+- id: no_direct_agent_github_write
+  severity: hard
+  description: No LLM agent receives direct GitHub write credentials.
+- id: no_direct_builder_repo_apply
+  severity: hard
+  description: Builders submit proposals only and never apply directly to the canonical
+    repo.
+- id: events_append_only
+  severity: hard
+  description: Every mutation emits an append-only event.
+- id: control_config_mutations_via_nexusctl_flow
+  severity: hard
+  description: Control Config changes are authoritative design mutations and must go through reviewed Nexusctl-controlled repository flow, never direct agent writes.
+- id: control_store_mutations_via_nexusctl_services
+  severity: hard
+  description: Control Store state and audit events may be mutated only by Nexusctl app services.
+- id: generated_runtime_config_mutations_via_nexusctl_generation
+  severity: hard
+  description: Generated OpenClaw Runtime Config under generated/* is derived output and may be changed only by Nexusctl generation services.
+- id: schedules_mutated_via_nexusctl_control_flow
+  severity: hard
+  description: Runtime cronjobs and schedule definitions are controlled through Nexusctl schedule flows; agents may request or trigger allowed runs but not edit cron config directly.
+- id: merge_only_merge_applier
+  severity: hard
+  description: Only the dedicated Merge Applier Agent subject may execute repo.apply
+    or GitHub PR merges after gates pass.
+- id: github_webhook_signatures_required
+  severity: hard
+  description: GitHub webhook deliveries must verify X-Hub-Signature-256 before persistence.
+- id: github_reconciliation_alerts_unknown_drift
+  severity: hard
+  description: Unknown GitHub changes create Nexusctl alerts instead of mutating lifecycle
+    state.
+domain_overrides:
+  normal_agents: forbidden
+  control-router: policy_limited_read_and_routing

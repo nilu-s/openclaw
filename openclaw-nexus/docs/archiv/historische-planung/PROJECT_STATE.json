@@ -1,0 +1,803 @@
+{
+  "architecture_version": "greenfield-v1",
+  "completed_phase": 20,
+  "improvement_program": {
+    "active_phase_file": "phasen.md",
+    "completed_phase": "VP-13",
+    "completed_phases": [
+      "VP-01",
+      "VP-02",
+      "VP-03",
+      "VP-04",
+      "VP-05",
+      "VP-06",
+      "VP-07",
+      "VP-08",
+      "VP-09",
+      "VP-10",
+      "VP-11",
+      "VP-12",
+      "VP-13"
+    ],
+    "current_phase": null,
+    "current_phase_title": "architecture-hardening-v1 abgeschlossen",
+    "legacy_phase_archive": "docs/archiv/phasen/legacy-greenfield-phases-v1.md",
+    "name": "architecture-hardening-v1",
+    "phase_duration_target": "ca. 4h pro Phase für einen erfahrenen Entwickler",
+    "phase_outputs": {
+      "VP-01": {
+        "files_added": [
+          "nexusctl/src/nexusctl/interfaces/cli/runtime.py",
+          "nexusctl/src/nexusctl/interfaces/cli/output.py",
+          "tests/test_cli_runtime.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/__init__.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/*.py",
+          "phasen.md",
+          "PROJECT_STATE.json",
+          "PHASES.md"
+        ],
+        "name": "CLI-Kommandoschnitt vorbereiten und entkoppeln",
+        "status": "completed",
+        "validation": [
+          "PYTHONPATH=nexusctl/src pytest -q tests/test_cli_runtime.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_auth_identity.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_runtime_tools.py"
+        ]
+      },
+      "VP-02": {
+        "files_added": [
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "tests/test_cli_command_modules.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/me.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/domains.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/goals.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/schedules.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/generate.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/doctor.py",
+          "phasen.md",
+          "README.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "CLI-Domain-Kommandos aus main.py auslagern",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_runtime.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_goals_evidence.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_openclaw_generation.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_schedules.py"
+        ]
+      },
+      "VP-03": {
+        "files_added": [],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/cli/runtime.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/me.py",
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "tests/test_cli_runtime.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Zentrale CommandRuntime / Unit of Work einführen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_runtime.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_goals_evidence.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_openclaw_generation.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_schedules.py"
+        ]
+      },
+      "VP-04": {
+        "files_added": [],
+        "files_changed": [
+          "nexusctl/src/nexusctl/storage/sqlite/repositories.py",
+          "nexusctl/src/nexusctl/app/goal_service.py",
+          "nexusctl/src/nexusctl/app/feature_request_service.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Repository-Schicht für Goals und Feature Requests konsequent nutzen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_goals_evidence.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_feature_requests.py::test_feature_requests_trading_strategist_creates_software_feature_request_from_auth_domain",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_feature_requests.py::test_feature_requests_source_domain_cannot_be_forged_via_goal_or_cli",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_feature_requests.py::test_feature_requests_nexus_can_route_and_transition_requests (Testfall bestanden; äußerer Prozess-Timeout)",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_feature_requests.py::test_feature_requests_dedupe_returns_existing_request_and_audits_it",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py"
+        ]
+      },
+      "VP-06": {
+        "acceptance": [
+          "CLI funktioniert weiterhin lokal.",
+          "Ein erster Command kann gegen HTTP laufen.",
+          "HTTP-Fehler werden verständlich gemeldet."
+        ],
+        "files_added": [
+          "nexusctl/src/nexusctl/interfaces/http/client.py",
+          "tests/test_http_cli_client.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/me.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "HTTP/CLI-Parität entwerfen und ersten API-Client einführen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_http_cli_client.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py tests/test_http_api.py tests/test_http_cli_client.py"
+        ]
+      },
+      "VP-07": {
+        "acceptance": [
+          "HTTP nutzt dieselben App-Services und Policy-Prüfungen wie die lokale CLI.",
+          "CLI-Kommandos bleiben lokal defaultfähig und können optional per --api-url remote laufen.",
+          "Parität ist für Feature-Request- und Work-Workflow über HTTP getestet."
+        ],
+        "files_added": [
+          "tests/test_http_cli_parity.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/http/client.py",
+          "nexusctl/src/nexusctl/interfaces/http/routes.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "HTTP-Endpunkte erweitern und CLI optional remote-fähig machen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_http_cli_parity.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_http_cli_client.py tests/test_http_cli_parity.py tests/test_http_api.py tests/test_feature_requests.py tests/test_work_scopes.py"
+        ]
+      },
+      "VP-08": {
+        "acceptance": [
+          "Server startet weiterhin lokal mit Loopback-Default.",
+          "Remote-Bindings ohne TLS sind blockiert oder nur per explizitem Operator-Opt-in möglich.",
+          "Client-Timeouts und sichere Read-Retries sind zentral konfigurierbar.",
+          "HTTP-Request-Bodies sind vor dem Routing begrenzt."
+        ],
+        "files_added": [
+          "nexusctl/src/nexusctl/interfaces/http/operational.py",
+          "tests/test_operational_hardening.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/http/server.py",
+          "nexusctl/src/nexusctl/interfaces/http/client.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "config/.env.example",
+          "config/docker-compose.yml",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Operational Hardening aus der Referenz übernehmen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_operational_hardening.py tests/test_http_cli_client.py tests/test_http_cli_parity.py tests/test_http_api.py"
+        ]
+      },
+      "VP-09": {
+        "acceptance": [
+          "GitHub-Parser sind unit-getestet.",
+          "GitHub-State darf Nexus-State nicht autoritativ überschreiben.",
+          "Reconciliation erzeugt Alerts bei unbekannter Drift."
+        ],
+        "files_added": [
+          "nexusctl/src/nexusctl/adapters/github/hardening.py",
+          "tests/test_github_hardening.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/adapters/github/client.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "GitHub-Adapter aus der Referenz härten",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_github_hardening.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_github_projection.py tests/test_webhooks_reconciliation.py tests/test_github_hardening.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_policy_checks.py::test_policy_checks_policy_check_reports_pending_required_gates_and_syncs_github_checks tests/test_policy_checks.py::test_policy_checks_changed_pr_head_sha_after_approval_blocks_policy_gate",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_review_acceptance.py::test_review_acceptance_software_reviewer_can_review_but_builder_cannot tests/test_review_acceptance.py::test_review_acceptance_trading_acceptance_completes_business_gate_not_technical_review tests/test_review_acceptance.py::test_review_acceptance_trading_sentinel_safety_veto_blocks_merge_gate",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_merge_gate.py::test_merge_gate_only_applier_merges_after_green_required_checks tests/test_merge_gate.py::test_merge_gate_merge_requires_synced_green_checks_and_no_critical_alerts (Tests bestanden; äußerer Prozess-Timeout nach Ausgabe)",
+          "python3 scripts/validate_project.py (Altvalidator: root completed_phase=20 verlangt next_phase null; Verbesserungsplan nutzt improvement_program)"
+        ]
+      },
+      "VP-10": {
+        "acceptance": [
+          "Keine unentschiedenen kritischen Runtime-Tool-Review-Items.",
+          "Trading-Agenten können keine Software-Tools ausführen.",
+          "Destruktive Tools bleiben standardmäßig blockiert."
+        ],
+        "files_added": [
+          "generated/imports/legacy_import_review_decisions.json",
+          "generated/imports/legacy_import_review_decisions.md",
+          "tests/test_runtime_tool_review_cleanup.py"
+        ],
+        "files_changed": [
+          "nexus/capabilities.yml",
+          "nexus/agents.yml",
+          "nexus/runtime-tools.yml",
+          "nexusctl/src/nexusctl/app/runtime_tool_service.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Runtime-Tools und importierte Review-Items bereinigen",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_runtime_tools.py tests/test_runtime_tool_review_cleanup.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_openclaw_generation.py tests/test_runtime_tools.py tests/test_runtime_tool_review_cleanup.py",
+          "timeout 30 python3 scripts/validate_project.py"
+        ]
+      },
+      "VP-11": {
+        "acceptance": [
+          "Fast-Suite läuft zuverlässig.",
+          "Full-Suite ist dokumentiert.",
+          "Hängende Integrationspfade sind isoliert oder mit Timeout versehen."
+        ],
+        "files_added": [
+          "conftest.py",
+          "tests/test_test_strategy.py"
+        ],
+        "files_changed": [
+          "pytest.ini",
+          "scripts/run_tests.sh",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Teststrategie beschleunigen und blockierende Tests isolieren",
+        "status": "completed",
+        "validation": [
+          "./scripts/run_tests.sh fast -> 41 passed, 65 deselected",
+          "./scripts/run_tests.sh integration -vv -> 20 passed",
+          "./scripts/run_tests.sh e2e -> 1 passed"
+        ]
+      },
+      "VP-12": {
+        "acceptance": [
+          "doctor --json zeigt klare Statuscodes.",
+          "Drift wird nicht nur erkannt, sondern handlungsorientiert erklärt.",
+          "Kritische Alerts blockieren weiterhin Merge-Gates."
+        ],
+        "files_added": [
+          "tests/test_doctor_reports.py"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/app/generation_service.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/doctor.py",
+          "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "name": "Doctor-, Audit- und Drift-Reports verbessern",
+        "status": "completed",
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_doctor_reports.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_openclaw_generation.py"
+        ]
+      },
+      "VP-13": {
+        "name": "Abschlussreview und Architektur-Kontrakte stabilisieren",
+        "status": "completed",
+        "files_added": [
+          "tests/test_architecture_contracts.py",
+          "docs/archiv/phasen/architecture-hardening-vp00-vp12.md"
+        ],
+        "files_changed": [
+          "nexusctl/src/nexusctl/interfaces/cli/runtime.py",
+          "nexusctl/src/nexusctl/interfaces/cli/main.py",
+          "phasen.md",
+          "PROJECT_STATE.json"
+        ],
+        "validation": [
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_architecture_contracts.py"
+        ]
+      }
+    },
+    "planned_phases": [
+      "VP-01",
+      "VP-02",
+      "VP-03",
+      "VP-04",
+      "VP-05",
+      "VP-06",
+      "VP-07",
+      "VP-08",
+      "VP-09",
+      "VP-10",
+      "VP-11",
+      "VP-12",
+      "VP-13"
+    ],
+    "planning_date": "2026-05-05",
+    "rules": [
+      "README.md bleibt schlanker Projekt- und Link-Hub",
+      "endzustand.md wird nur bei bewusster Konzeptrevision geändert",
+      "phasen.md ist die einzige lebende Fortschrittsdatei",
+      "alte Phasen werden unter docs/archiv/phasen archiviert"
+    ],
+    "stable_concept_file": "endzustand.md"
+  },
+  "invariants": [
+    "nexusctl_is_source_of_truth",
+    "github_is_projection",
+    "openclaw_runtime_is_generated",
+    "agent_domain_is_auth_derived",
+    "no_direct_agent_github_write",
+    "no_direct_builder_repo_apply",
+    "blueprint_is_design_source_of_truth",
+    "all_agents_have_exactly_one_domain",
+    "normal_agents_have_no_cross_domain_mutating_capabilities",
+    "trading_agents_have_no_software_code_capabilities",
+    "software_agents_have_no_trading_strategy_mutation_capabilities",
+    "phase2_policy_engine_enforces_capabilities",
+    "domain_override_for_normal_agents_forbidden",
+    "software_builder_patch_only_no_review_or_apply",
+    "nexus_routes_and_grants_scopes_no_review_approval",
+    "phase3_sqlite_storage_initialized_from_blueprint",
+    "phase3_event_store_append_only",
+    "phase3_repository_mutations_emit_events",
+    "phase4_agent_identity_from_token",
+    "phase4_normal_agent_domain_override_rejected",
+    "phase4_token_hashes_not_plaintext",
+    "phase4_sessions_have_ttl",
+    "phase4_nexus_policy_limited_domain_override",
+    "phase5_goals_managed_by_nexusctl",
+    "phase5_evidence_auditable",
+    "phase5_goal_measurements_emit_events",
+    "phase5_goal_evaluations_emit_events",
+    "phase5_goal_visibility_domain_scoped",
+    "phase6_feature_requests_managed_by_nexusctl",
+    "phase6_source_domain_from_subject",
+    "phase6_feature_request_dedupe_audited",
+    "phase6_nexus_can_route_feature_requests",
+    "phase6_trading_requests_do_not_grant_software_scope",
+    "phase7_github_app_credentials_do_not_block_mock_tests",
+    "phase7_github_client_is_mockable",
+    "phase7_feature_requests_project_to_github_issues",
+    "phase7_issue_projection_records_nexus_link",
+    "phase7_github_issue_body_contains_acceptance_and_safety_contracts",
+    "phase7_no_agent_github_write_tokens",
+    "phase8_work_items_reference_feature_request_and_github_issue",
+    "phase8_scope_leases_are_path_bounded",
+    "phase8_scope_leases_have_ttl_and_expiry",
+    "phase8_only_nexus_or_control_policy_grants_scope_leases",
+    "phase8_software_builder_can_use_but_not_grant_lease",
+    "phase8_trading_agents_cannot_receive_software_lease",
+    "phase9_patch_proposals_are_scope_validated",
+    "phase9_builder_cannot_merge_or_create_pr",
+    "phase9_nexus_creates_branch_pr_projection",
+    "phase9_github_pr_links_patch_and_feature_request",
+    "phase9_all_github_writes_through_nexusctl",
+    "phase10_policy_gates_persisted",
+    "phase10_github_checks_synced_by_nexusctl",
+    "phase10_pr_without_green_checks_not_merge_ready",
+    "phase10_changed_head_sha_requires_recheck",
+    "phase10_check_status_changes_emit_events",
+    "phase11_software_review_separate_from_trading_acceptance",
+    "phase11_technical_review_persisted_and_projected_to_pr_review",
+    "phase11_trading_acceptance_persisted_and_projected_to_labels",
+    "phase11_safety_veto_blocks_merge_gate",
+    "phase11_merge_gate_requires_review_and_business_acceptance",
+    "phase12_merge_only_nexusctl_applier",
+    "phase12_merge_requires_green_gates",
+    "phase12_merge_persists_records_and_updates_statuses",
+    "phase12_critical_github_alerts_block_merge",
+    "phase13_webhook_signatures_verified",
+    "phase13_webhook_deliveries_idempotent",
+    "phase13_github_webhook_events_persisted",
+    "phase13_unknown_github_changes_create_alerts",
+    "phase13_labels_reconciled_to_nexus_state",
+    "phase14_openclaw_runtime_generated_from_nexus",
+    "phase14_generated_agent_markdown_has_checksums",
+    "phase14_skill_allowlists_are_per_agent",
+    "phase14_tool_policies_are_per_agent",
+    "phase14_generated_artifact_drift_detected",
+    "phase15_schedules_rendered_from_nexus",
+    "phase15_no_autonomous_builder_cronjobs",
+    "phase15_cron_prompts_reference_standing_orders",
+    "phase15_schedule_run_events_persisted",
+    "phase15_trading_schedules_no_software_mutation",
+    "phase16_docker_compose_runtime",
+    "phase16_nexus_db_persistent_volume",
+    "phase16_openclaw_generated_mount_read_only",
+    "phase16_agent_workspaces_and_worktrees_are_volume_scoped",
+    "phase16_nexusctl_cli_container_available",
+    "phase16_services_have_healthchecks",
+    "phase17_runtime_tool_registry_is_nexus_backed",
+    "phase17_tool_access_checked_by_nexusctl",
+    "phase17_trading_agents_cannot_invoke_software_tools",
+    "phase17_live_trade_requires_approval_or_denial",
+    "phase17_destructive_tools_blocked_by_default",
+    "phase18_http_api_uses_shared_app_services",
+    "phase18_auth_me_uses_token_registry",
+    "phase18_webhook_route_is_signature_checked",
+    "phase18_http_validation_is_schema_based",
+    "phase18_cli_and_http_share_policy_engine",
+    "phase19_legacy_import_is_idempotent",
+    "phase19_import_creates_review_report",
+    "phase19_no_legacy_runtime_dependency",
+    "phase19_legacy_agent_roles_mapped_to_greenfield_agents",
+    "phase19_legacy_github_config_used_as_review_hint_only",
+    "phase20_e2e_mvp_demo_passes_locally",
+    "phase20_full_audit_chain_from_goal_to_merge",
+    "phase20_security_invariants_regression_tested",
+    "phase20_packaging_preserves_complete_project_tree",
+    "phase_vp01_cli_runtime_prepared",
+    "vp08_loopback_api_binding_default",
+    "vp08_remote_plain_http_requires_explicit_opt_in",
+    "vp08_body_size_limit_enforced",
+    "vp08_client_timeout_and_read_retry_centralized",
+    "vp08_retries_only_safe_read_operations",
+    "phase_vp10_runtime_tool_review_items_resolved",
+    "phase_vp10_runtime_tool_invoke_capability_required",
+    "phase_vp10_destructive_runtime_tools_denied_by_default"
+  ],
+  "next_phase": null,
+  "phase20": {
+    "status": "completed",
+    "summary": "End-to-end MVP demo and hardening completed with local fake-GitHub flow from trading goal evidence to merge gate.",
+    "tests": [
+      "tests/test_e2e_delivery_flow.py"
+    ],
+    "validation": [
+      "scripts/validate_project.py",
+      "scripts/run_tests.sh",
+      "scripts/package_project.py"
+    ]
+  },
+  "phase_outputs": {
+    "19": {
+      "acceptance": [
+        "Kein Legacy-Code wird ins Runtime-Paket kopiert.",
+        "Import ist idempotent.",
+        "Import erzeugt Review-Report."
+      ],
+      "files_added": [
+        "nexusctl/src/nexusctl/app/legacy_import_service.py",
+        "tests/test_legacy_import.py",
+        "generated/imports/legacy_import_report.json",
+        "generated/imports/legacy_import_report.md"
+      ],
+      "name": "Migration/Importer aus altem Clean-Paket",
+      "status": "completed"
+    },
+    "VP-05": {
+      "acceptance": [
+        "Merge-Gate-Verhalten bleibt identisch.",
+        "Scope- und Patch-Pfadprüfung bleibt unverändert streng.",
+        "Tests für Phasen 8 bis 12 laufen weiterhin oder sind einzeln validiert, wo Sammelläufe in dieser Umgebung hängen."
+      ],
+      "files_changed": [
+        "nexusctl/src/nexusctl/storage/sqlite/repositories.py",
+        "nexusctl/src/nexusctl/app/work_service.py",
+        "nexusctl/src/nexusctl/app/patch_service.py",
+        "nexusctl/src/nexusctl/app/review_service.py",
+        "nexusctl/src/nexusctl/app/acceptance_service.py",
+        "nexusctl/src/nexusctl/app/check_service.py",
+        "nexusctl/src/nexusctl/app/merge_service.py",
+        "phasen.md",
+        "PROJECT_STATE.json"
+      ],
+      "name": "Repository-Schicht für Work, Patches, Reviews, Acceptance und Merge erweitern",
+      "status": "completed"
+    },
+    "VP-06": {
+      "acceptance": [
+        "CLI funktioniert weiterhin lokal.",
+        "Ein erster Command kann gegen HTTP laufen.",
+        "HTTP-Fehler werden verständlich gemeldet."
+      ],
+      "files_added": [
+        "nexusctl/src/nexusctl/interfaces/http/client.py",
+        "tests/test_http_cli_client.py"
+      ],
+      "files_changed": [
+        "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+        "nexusctl/src/nexusctl/interfaces/cli/commands/me.py",
+        "phasen.md",
+        "PROJECT_STATE.json"
+      ],
+      "name": "HTTP/CLI-Parität entwerfen und ersten API-Client einführen",
+      "status": "completed",
+      "validation": [
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_http_cli_client.py",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py tests/test_http_api.py tests/test_http_cli_client.py"
+      ]
+    },
+    "VP-09": {
+      "acceptance": [
+        "GitHub-Parser sind unit-getestet.",
+        "GitHub-State darf Nexus-State nicht autoritativ überschreiben.",
+        "Reconciliation erzeugt Alerts bei unbekannter Drift."
+      ],
+      "files_added": [
+        "nexusctl/src/nexusctl/adapters/github/hardening.py",
+        "tests/test_github_hardening.py"
+      ],
+      "files_changed": [
+        "nexusctl/src/nexusctl/adapters/github/client.py",
+        "phasen.md",
+        "PROJECT_STATE.json"
+      ],
+      "name": "GitHub-Adapter aus der Referenz härten",
+      "status": "completed",
+      "validation": [
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_github_hardening.py",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_github_projection.py tests/test_webhooks_reconciliation.py tests/test_github_hardening.py",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_policy_checks.py::test_policy_checks_policy_check_reports_pending_required_gates_and_syncs_github_checks tests/test_policy_checks.py::test_policy_checks_changed_pr_head_sha_after_approval_blocks_policy_gate",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_review_acceptance.py::test_review_acceptance_software_reviewer_can_review_but_builder_cannot tests/test_review_acceptance.py::test_review_acceptance_trading_acceptance_completes_business_gate_not_technical_review tests/test_review_acceptance.py::test_review_acceptance_trading_sentinel_safety_veto_blocks_merge_gate",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_merge_gate.py::test_merge_gate_only_applier_merges_after_green_required_checks tests/test_merge_gate.py::test_merge_gate_merge_requires_synced_green_checks_and_no_critical_alerts (Tests bestanden; äußerer Prozess-Timeout nach Ausgabe)",
+        "python3 scripts/validate_project.py (Altvalidator: root completed_phase=20 verlangt next_phase null; Verbesserungsplan nutzt improvement_program)"
+      ]
+    },
+    "VP-12": {
+      "acceptance": [
+        "doctor --json zeigt klare Statuscodes.",
+        "Drift wird nicht nur erkannt, sondern handlungsorientiert erklärt.",
+        "Kritische Alerts blockieren weiterhin Merge-Gates."
+      ],
+      "files_added": [
+        "tests/test_doctor_reports.py"
+      ],
+      "files_changed": [
+        "nexusctl/src/nexusctl/app/generation_service.py",
+        "nexusctl/src/nexusctl/interfaces/cli/commands/doctor.py",
+        "nexusctl/src/nexusctl/interfaces/cli/commands/common.py",
+        "phasen.md",
+        "PROJECT_STATE.json"
+      ],
+      "name": "Doctor-, Audit- und Drift-Reports verbessern",
+      "status": "completed",
+      "validation": [
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_doctor_reports.py",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_cli_command_modules.py",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=nexusctl/src pytest -q tests/test_openclaw_generation.py"
+      ]
+    },
+    "phase_1": [
+      "nexus/blueprint.yml",
+      "nexus/domains.yml",
+      "nexus/agents.yml",
+      "nexus/capabilities.yml",
+      "nexus/goals.yml",
+      "nexus/schedules.yml",
+      "nexus/github.yml",
+      "nexus/policies.yml",
+      "nexus/standing-orders.yml",
+      "scripts/validate_project.py",
+      "tests/test_blueprint_contract.py"
+    ],
+    "phase_10": [
+      "nexusctl/src/nexusctl/adapters/github/checks.py",
+      "nexusctl/src/nexusctl/adapters/github/client.py",
+      "nexusctl/src/nexusctl/app/check_service.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "tests/test_policy_checks.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_11": [
+      "nexusctl/src/nexusctl/app/review_service.py",
+      "nexusctl/src/nexusctl/app/acceptance_service.py",
+      "nexusctl/src/nexusctl/adapters/github/reviews.py",
+      "nexusctl/src/nexusctl/adapters/github/client.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexus/github.yml",
+      "tests/test_review_acceptance.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_12": [
+      "nexusctl/src/nexusctl/app/merge_service.py",
+      "nexusctl/src/nexusctl/adapters/github/pulls.py",
+      "nexusctl/src/nexusctl/adapters/github/client.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexus/agents.yml",
+      "nexus/capabilities.yml",
+      "nexus/policies.yml",
+      "tests/test_merge_gate.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md",
+      "scripts/run_tests.sh"
+    ],
+    "phase_13": [
+      "nexusctl/src/nexusctl/adapters/github/webhooks.py",
+      "nexusctl/src/nexusctl/app/reconciliation_service.py",
+      "nexusctl/src/nexusctl/interfaces/http/routes.py",
+      "nexusctl/src/nexusctl/interfaces/http/server.py",
+      "nexusctl/src/nexusctl/interfaces/http/schemas.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexus/agents.yml",
+      "nexus/capabilities.yml",
+      "tests/test_webhooks_reconciliation.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_14": [
+      "nexusctl/src/nexusctl/app/generation_service.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/config_writer.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/agent_writer.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/skill_writer.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "generated/openclaw/openclaw.json",
+      "generated/agents/*/{AGENTS.md,SOUL.md,TOOLS.md,IDENTITY.md,USER.md,HEARTBEAT.md,BOOTSTRAP.md,MEMORY.md}",
+      "generated/skills/*.json",
+      "generated/skills/allowlists/*.json",
+      "generated/skills/tool-policies/*.json",
+      "tests/test_openclaw_generation.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_15": [
+      "nexusctl/src/nexusctl/app/schedule_service.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/schedule_writer.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/agent_writer.py",
+      "nexusctl/src/nexusctl/adapters/openclaw/config_writer.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexus/agents.yml",
+      "generated/openclaw/schedules/*.json",
+      "generated/agents/*/SOUL.md",
+      "generated/agents/*/HEARTBEAT.md",
+      "tests/test_schedules.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_16": [
+      "config/Dockerfile.nexusctl",
+      "config/Dockerfile.openclaw",
+      "config/docker-compose.yml",
+      "config/.env.example",
+      "nexusctl/src/nexusctl/interfaces/http/server.py",
+      "tests/test_docker_runtime.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_17": [
+      "nexus/runtime-tools.yml",
+      "nexusctl/src/nexusctl/domain/runtime_tools.py",
+      "nexusctl/src/nexusctl/app/runtime_tool_service.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "tests/test_runtime_tools.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_18": [
+      "nexusctl/src/nexusctl/interfaces/http/auth.py",
+      "nexusctl/src/nexusctl/interfaces/http/routes.py",
+      "nexusctl/src/nexusctl/interfaces/http/schemas.py",
+      "nexusctl/src/nexusctl/interfaces/http/server.py",
+      "tests/test_http_api.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_2": [
+      "nexusctl/src/nexusctl/domain/models.py",
+      "nexusctl/src/nexusctl/domain/states.py",
+      "nexusctl/src/nexusctl/domain/errors.py",
+      "nexusctl/src/nexusctl/authz/subject.py",
+      "nexusctl/src/nexusctl/authz/capability_matrix.py",
+      "nexusctl/src/nexusctl/authz/policy_engine.py",
+      "tests/test_policy_contract.py",
+      "scripts/validate_project.py",
+      "pytest.ini"
+    ],
+    "phase_3": [
+      "nexusctl/src/nexusctl/storage/sqlite/connection.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexusctl/src/nexusctl/storage/sqlite/repositories.py",
+      "nexusctl/src/nexusctl/storage/event_store.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "tests/test_storage_sqlite.py",
+      "scripts/validate_project.py",
+      "nexusctl/pyproject.toml"
+    ],
+    "phase_4": [
+      "nexusctl/src/nexusctl/authz/token_registry.py",
+      "nexusctl/src/nexusctl/authz/__init__.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/authz/policy_engine.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "tests/test_auth_identity.py",
+      "scripts/validate_project.py",
+      "README.md"
+    ],
+    "phase_5": [
+      "nexusctl/src/nexusctl/app/goal_service.py",
+      "nexusctl/src/nexusctl/domain/models.py",
+      "nexusctl/src/nexusctl/authz/policy_engine.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "tests/test_goals_evidence.py",
+      "scripts/validate_project.py",
+      "README.md"
+    ],
+    "phase_6": [
+      "nexusctl/src/nexusctl/app/feature_request_service.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/interfaces/cli/commands/feature_requests.py",
+      "nexusctl/src/nexusctl/storage/sqlite/schema.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexusctl/src/nexusctl/storage/sqlite/repositories.py",
+      "nexusctl/src/nexusctl/domain/models.py",
+      "tests/test_feature_requests.py",
+      "scripts/validate_project.py",
+      "README.md"
+    ],
+    "phase_7": [
+      "nexusctl/src/nexusctl/adapters/github/app_auth.py",
+      "nexusctl/src/nexusctl/adapters/github/client.py",
+      "nexusctl/src/nexusctl/app/github_service.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexus/capabilities.yml",
+      "nexus/agents.yml",
+      "tests/test_github_projection.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_8": [
+      "nexusctl/src/nexusctl/app/work_service.py",
+      "nexusctl/src/nexusctl/app/scope_service.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexusctl/src/nexusctl/domain/models.py",
+      "nexusctl/src/nexusctl/storage/sqlite/migrations.py",
+      "nexusctl/src/nexusctl/storage/sqlite/repositories.py",
+      "tests/test_work_scopes.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ],
+    "phase_9": [
+      "nexusctl/src/nexusctl/adapters/git/worktree.py",
+      "nexusctl/src/nexusctl/adapters/git/diff.py",
+      "nexusctl/src/nexusctl/adapters/git/applier.py",
+      "nexusctl/src/nexusctl/app/patch_service.py",
+      "nexusctl/src/nexusctl/adapters/github/client.py",
+      "nexusctl/src/nexusctl/interfaces/cli/main.py",
+      "nexus/agents.yml",
+      "tests/test_patch_proposals.py",
+      "scripts/validate_project.py",
+      "PROJECT_STATE.json",
+      "README.md"
+    ]
+  },
+  "project": "openclaw-nexus-greenfield",
+  "source_of_truth": {
+    "design": "nexus/*.yml",
+    "generated": "generated/*",
+    "runtime": "nexus.db"
+  }
+}

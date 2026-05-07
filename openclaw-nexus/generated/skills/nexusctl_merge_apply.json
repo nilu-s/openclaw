@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:38ccc0012e8ac413f0038415181528ebb54f5c57fafd5fc3f9c048029087754e",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "merge-applier"
+  ],
+  "description": "Apply approved merge gates through the Nexusctl GitHub App boundary.",
+  "id": "nexusctl_merge_apply",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

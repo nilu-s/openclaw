@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:390ffc3aedff213e69984afe78b24b9134c174ced8a1dadc80fc44a6adebe92a",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router"
+  ],
+  "description": "Grant and revoke bounded scope leases.",
+  "id": "nexusctl_scope_control",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

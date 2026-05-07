@@ -1,0 +1,30 @@
+{
+  "_generated": {
+    "artifact_kind": "openclaw_schedule",
+    "checksum": "sha256:09cbcabc39895923483286fc22b277102763270b972f5a341901537d96d6b6a1",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent": "software-techlead",
+  "command": [
+    "nexusctl",
+    "schedules",
+    "run",
+    "software_release_readiness",
+    "--json"
+  ],
+  "cron": "0 9 * * 1-5",
+  "domain": "software",
+  "enabled": true,
+  "guards": {
+    "agent_direct_cron_mutation_allowed": false,
+    "domain_source": "auth_token",
+    "mutation_boundary": "nexusctl_schedule_control_flow_only",
+    "no_manual_generated_edits": true,
+    "source_of_truth": "nexusctl",
+    "standing_order_source": "nexus/standing-orders.yml"
+  },
+  "id": "software_release_readiness",
+  "prompt": "Run Nexusctl schedule `software_release_readiness` for standing order `software.software_release_readiness`. Read the standing order from nexus/standing-orders.yml at runtime; do not duplicate or reinterpret it in generated cron config. Schedule execution is a Nexusctl-controlled run request, not a direct cron mutation.",
+  "standing_order": "software.software_release_readiness"
+}

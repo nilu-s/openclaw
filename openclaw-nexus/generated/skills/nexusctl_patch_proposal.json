@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:88728cfa0344f743bbae8fe29b5f40ee7646fb26d910ccb44495462e2359aa2d",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "software-builder"
+  ],
+  "description": "Submit scoped patch proposals.",
+  "id": "nexusctl_patch_proposal",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

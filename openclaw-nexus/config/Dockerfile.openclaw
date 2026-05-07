@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+# MVP OpenClaw image wrapper for runtime container.
+# Replace OPENCLAW_BASE_IMAGE with the real OpenClaw runtime image when it is available.
+ARG OPENCLAW_BASE_IMAGE=python:3.11-slim
+FROM ${OPENCLAW_BASE_IMAGE} AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    OPENCLAW_CONFIG=/generated/openclaw/openclaw.json \
+    OPENCLAW_GENERATED_DIR=/generated \
+    OPENCLAW_WORKSPACES_DIR=/workspaces
+
+WORKDIR /runtime
+RUN addgroup --system openclaw \
+    && adduser --system --ingroup openclaw --home /home/openclaw openclaw \
+    && mkdir -p /generated /workspaces \
+    && chown -R openclaw:openclaw /runtime /workspaces /home/openclaw
+
+COPY --chown=openclaw:openclaw generated /generated
+
+USER openclaw
+EXPOSE 8090
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD test -r "$OPENCLAW_CONFIG" || exit 1
+
+# A minimal wrapper that keeps the container alive and verifies generated config is mounted.
+# Production deployments should override this command with the real OpenClaw gateway entrypoint.
+CMD ["python", "-c", "import os, time; cfg=os.environ.get('OPENCLAW_CONFIG'); assert cfg and os.path.exists(cfg), cfg; print('openclaw wrapper ready', flush=True); time.sleep(10**9)"]

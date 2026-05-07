@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:6a8bc29b412a16be1c229ce3417562f535528855fc854ed28e09553142a79331",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "trading-sentinel"
+  ],
+  "description": "Submit risk and safety vetoes.",
+  "id": "nexusctl_safety_veto",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

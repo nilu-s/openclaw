@@ -1,0 +1,38 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:60f79e8b1706b22b7b91d2032c697f63996b12cc708931f2b7f04a5ad7125923",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "trading-analyst",
+  "capabilities": [
+    "evidence.add",
+    "feature_request.read",
+    "goal.evaluate",
+    "goal.measure",
+    "goal.read",
+    "runtime.tool.invoke",
+    "schedule.run",
+    "system.status.read"
+  ],
+  "domain": "trading",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "evidence.add",
+    "goal.evaluate",
+    "goal.measure",
+    "schedule.run"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "system.status.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "measurement_analyst",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

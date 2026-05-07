@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:97fc56599da0b7e1967a752d717ced47d0d947dee2a87a45bc21b9d0f6c7721c",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-reviewer",
+  "domain": "software",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_feature_request_ops",
+    "nexusctl_review"
+  ],
+  "source": "nexus/agents.yml"
+}

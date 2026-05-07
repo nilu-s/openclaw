@@ -1,0 +1,17 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:92cf7374e59a9f335837da7838f3fb8e04de4d768a392eba50336b3cf8f26f30",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "platform-maintainer",
+  "domain": "platform",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_status",
+    "openclaw_generation",
+    "runtime_integrity"
+  ],
+  "source": "nexus/agents.yml"
+}

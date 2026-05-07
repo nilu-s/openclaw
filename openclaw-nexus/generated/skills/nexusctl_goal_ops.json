@@ -1,0 +1,17 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:49b717877115cfe721d29a1c9600c4ff823d8c9dba1236616a4a22e873969d0a",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "trading-analyst",
+    "trading-sentinel",
+    "trading-strategist"
+  ],
+  "description": "Read, measure, and evaluate goal definitions.",
+  "id": "nexusctl_goal_ops",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

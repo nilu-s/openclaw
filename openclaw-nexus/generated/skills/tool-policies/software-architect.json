@@ -1,0 +1,40 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:4b1bfbc2b94c125dbef09042e142b2ac5ea6247a7a324612030ab59d60674cc1",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "software-architect",
+  "capabilities": [
+    "design.propose",
+    "feature_request.read",
+    "goal.read",
+    "policy.check",
+    "runtime.tool.invoke",
+    "scope.request",
+    "system.status.read",
+    "work.plan",
+    "work.read"
+  ],
+  "domain": "software",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "design.propose",
+    "scope.request",
+    "work.plan"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "policy.check",
+    "runtime.tool.invoke",
+    "system.status.read",
+    "work.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "technical_planner",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:40e9bd5d963fab9c920444186f2647ee004bed89b8cb70c27d4e229159e6110f",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "platform-maintainer"
+  ],
+  "description": "Generate OpenClaw runtime artifacts from Nexus design.",
+  "id": "openclaw_generation",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

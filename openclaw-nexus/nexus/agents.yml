@@ -1,0 +1,281 @@
+schema_version: 1
+agent_identity:
+  domain_source: auth_token
+  normal_domain_override_allowed: false
+  github_write_tokens_for_agents: false
+agents:
+- id: operator
+  display_name: Operator Agent
+  domain: control
+  role: operator
+  normal_agent: true
+  description: User interface, triage, status, explicit approvals; no code changes.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - domain.read
+  - goal.read
+  - feature_request.read
+  - events.read
+  skills:
+  - nexusctl_status
+  - nexusctl_feature_request_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: control-router
+  display_name: Control Router Agent
+  domain: control
+  role: control_router
+  normal_agent: false
+  description: Routes feature requests, grants or revokes scope leases through nexusctl
+    policy, and reconciles projections; not a lifecycle authority itself and no implementation
+    or review approval.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - domain.read
+  - goal.read
+  - feature_request.read
+  - feature_request.create
+  - feature_request.route
+  - feature_request.transition
+  - scope.lease.grant
+  - scope.lease.revoke
+  - work.read
+  - work.assign
+  - policy.check
+  - github.issue.sync
+  - github.repo.sync
+  - github.label.sync
+  - github.pr.create
+  - github.check.sync
+  - github.webhook.verify
+  - github.reconcile
+  - schedule.read
+  - events.read
+  - schedule.run
+  skills:
+  - nexusctl_status
+  - nexusctl_feature_request_ops
+  - nexusctl_routing
+  - nexusctl_scope_control
+  - nexusctl_github_projection
+  - nexusctl_github_reconciliation
+  github:
+    direct_write: false
+    projection_via_github_app: true
+  repo:
+    direct_apply: false
+- id: merge-applier
+  display_name: Merge Applier Agent
+  domain: control
+  role: merge_applier
+  normal_agent: false
+  description: Gate-bound apply actor for nexusctl; applies merges only after merge
+    gates pass and never implements or approves reviews.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - feature_request.read
+  - work.read
+  - patch.read
+  - policy.check
+  - repo.apply
+  - github.label.sync
+  skills:
+  - nexusctl_merge_apply
+  - nexusctl_github_projection
+  - nexusctl_status
+  github:
+    direct_write: false
+    projection_via_github_app: true
+  repo:
+    direct_apply: false
+- id: platform-maintainer
+  display_name: Platform Maintainer Agent
+  domain: platform
+  role: runtime_maintainer
+  normal_agent: true
+  description: Maintains OpenClaw/Docker/generation/runtime hygiene; no trading or
+    software domain decisions.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - domain.read
+  - runtime.generate
+  - runtime.validate
+  - schedule.read
+  - schedule.run
+  - backup.create
+  - events.read
+  skills:
+  - runtime_integrity
+  - openclaw_generation
+  - nexusctl_status
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: software-architect
+  display_name: Software Architect Agent
+  domain: software
+  role: technical_planner
+  normal_agent: true
+  description: Technical planning and architecture; no implementation or merge.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - goal.read
+  - feature_request.read
+  - work.read
+  - work.plan
+  - scope.request
+  - design.propose
+  - policy.check
+  skills:
+  - nexusctl_work_planning
+  - nexusctl_feature_request_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: software-techlead
+  display_name: Software Tech Lead Agent
+  domain: software
+  role: technical_governance
+  normal_agent: true
+  description: Technical governance, work-readiness, release-readiness; no own build
+    bypass.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - goal.read
+  - feature_request.read
+  - work.read
+  - work.plan
+  - work.assign
+  - policy.check
+  - release.readiness
+  - schedule.run
+  skills:
+  - nexusctl_work_planning
+  - nexusctl_feature_request_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: software-builder
+  display_name: Software Builder Agent
+  domain: software
+  role: patch_builder
+  normal_agent: true
+  description: Implementation as scoped patch proposal; no scope grant, review, merge,
+    or direct repo apply.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - feature_request.read
+  - work.read
+  - patch.read
+  - patch.submit
+  skills:
+  - nexusctl_patch_proposal
+  - nexusctl_feature_request_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: software-reviewer
+  display_name: Software Reviewer Agent
+  domain: software
+  role: quality_reviewer
+  normal_agent: true
+  description: Technical review and quality gate; no implementation or merge.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - feature_request.read
+  - work.read
+  - patch.read
+  - review.submit
+  - review.approve
+  - policy.check
+  - schedule.run
+  skills:
+  - nexusctl_review
+  - nexusctl_feature_request_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: trading-strategist
+  display_name: Trading Strategist Agent
+  domain: trading
+  role: strategy_owner
+  normal_agent: true
+  description: Trading strategy goals, feature needs, and domain acceptance; no software
+    modification.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - goal.read
+  - goal.evaluate
+  - feature_request.read
+  - feature_request.create
+  - acceptance.submit
+  - trading.strategy.mutate
+  - schedule.run
+  skills:
+  - nexusctl_goal_ops
+  - nexusctl_feature_request_ops
+  - nexusctl_acceptance
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: trading-analyst
+  display_name: Trading Analyst Agent
+  domain: trading
+  role: measurement_analyst
+  normal_agent: true
+  description: Measurements, evidence, backtests, and goal evaluation; no software
+    modification.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - goal.read
+  - goal.measure
+  - goal.evaluate
+  - evidence.add
+  - feature_request.read
+  - schedule.run
+  skills:
+  - nexusctl_goal_ops
+  - trading_evidence
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false
+- id: trading-sentinel
+  display_name: Trading Sentinel Agent
+  domain: trading
+  role: risk_sentinel
+  normal_agent: true
+  description: Trading risk, safety veto, drawdown and data-quality monitoring.
+  capabilities:
+  - system.status.read
+  - runtime.tool.invoke
+  - goal.read
+  - feature_request.read
+  - safety.veto
+  - trading.risk.audit
+  - schedule.run
+  skills:
+  - nexusctl_safety_veto
+  - nexusctl_goal_ops
+  github:
+    direct_write: false
+  repo:
+    direct_apply: false

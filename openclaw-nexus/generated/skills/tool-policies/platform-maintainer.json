@@ -1,0 +1,40 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:07ab3ff42db665bd8a0844fcb3419a39e28f4b35a9c36783c4da96e15bfe7f3d",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "platform-maintainer",
+  "capabilities": [
+    "backup.create",
+    "domain.read",
+    "events.read",
+    "runtime.generate",
+    "runtime.tool.invoke",
+    "runtime.validate",
+    "schedule.read",
+    "schedule.run",
+    "system.status.read"
+  ],
+  "domain": "platform",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "backup.create",
+    "runtime.generate",
+    "schedule.run"
+  ],
+  "read_only_capabilities": [
+    "domain.read",
+    "events.read",
+    "runtime.tool.invoke",
+    "runtime.validate",
+    "schedule.read",
+    "system.status.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "runtime_maintainer",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

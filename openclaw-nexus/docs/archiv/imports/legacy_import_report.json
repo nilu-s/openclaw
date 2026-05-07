@@ -1,0 +1,738 @@
+{
+  "agents": [
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "main",
+      "status": "accepted",
+      "target_agent_id": "operator"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "nexus",
+      "status": "accepted",
+      "target_agent_id": "nexus"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "platform-optimizer",
+      "status": "accepted",
+      "target_agent_id": "platform-maintainer"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "sw-architect",
+      "status": "accepted",
+      "target_agent_id": "software-architect"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "sw-builder",
+      "status": "accepted",
+      "target_agent_id": "software-builder"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "sw-reviewer",
+      "status": "accepted",
+      "target_agent_id": "software-reviewer"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "sw-techlead",
+      "status": "accepted",
+      "target_agent_id": "software-techlead"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "trading-analyst",
+      "status": "accepted",
+      "target_agent_id": "trading-analyst"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "trading-sentinel",
+      "status": "accepted",
+      "target_agent_id": "trading-sentinel"
+    },
+    {
+      "decision": "mapped_to_greenfield_agent",
+      "files_seen": [
+        "AGENTS.md",
+        "BOOTSTRAP.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+        "MEMORY.md",
+        "SOUL.md",
+        "TOOLS.md",
+        "USER.md",
+        "WORKSPACE.md"
+      ],
+      "legacy_id": "trading-strategist",
+      "status": "accepted",
+      "target_agent_id": "trading-strategist"
+    }
+  ],
+  "capabilities": [
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "auth",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "capabilities_list",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "capabilities_set_status",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "capabilities_show",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "context",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "db_backup",
+      "status": "accepted",
+      "suggested_capability": "backup.create"
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "db_restore_check",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "events",
+      "status": "accepted",
+      "suggested_capability": "events.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_alerts",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_issue_create",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_issue_sync",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_pr_link",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_pr_sync",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_repos_list",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_repos_sync",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_status",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "github_sync",
+      "status": "accepted",
+      "suggested_capability": "github.issue.sync"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "goals_create",
+      "status": "accepted",
+      "suggested_capability": "goal.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "goals_list",
+      "status": "accepted",
+      "suggested_capability": "goal.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "goals_show",
+      "status": "accepted",
+      "suggested_capability": "goal.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "goals_update_status",
+      "status": "accepted",
+      "suggested_capability": "goal.read"
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "repos_assigned",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "repos_list",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "repos_show",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "request_create",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "request_list",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "request_show",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "request_transition",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "reviews_list",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "reviews_submit",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "rotate_token",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "suggested_capability_missing_in_greenfield",
+      "legacy_command": "runtime_tools_check",
+      "status": "manual_review",
+      "suggested_capability": "runtime.tool.invoke"
+    },
+    {
+      "decision": "suggested_capability_missing_in_greenfield",
+      "legacy_command": "runtime_tools_list",
+      "status": "manual_review",
+      "suggested_capability": "runtime.tool.invoke"
+    },
+    {
+      "decision": "suggested_capability_missing_in_greenfield",
+      "legacy_command": "runtime_tools_show",
+      "status": "manual_review",
+      "suggested_capability": "runtime.tool.invoke"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "scopes_effective",
+      "status": "accepted",
+      "suggested_capability": "scope.lease.grant"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "scopes_lease",
+      "status": "accepted",
+      "suggested_capability": "scope.lease.grant"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "scopes_leases",
+      "status": "accepted",
+      "suggested_capability": "scope.lease.grant"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "scopes_list",
+      "status": "accepted",
+      "suggested_capability": "scope.lease.grant"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "scopes_revoke_lease",
+      "status": "accepted",
+      "suggested_capability": "scope.lease.grant"
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "systems_list",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "no_automatic_capability_mapping",
+      "legacy_command": "systems_show",
+      "status": "manual_review",
+      "suggested_capability": null
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_approve_plan",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_assign",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_list",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_plan",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_set_implementation_context",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_show",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_submit_evidence",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    },
+    {
+      "decision": "mapped_to_existing_capability",
+      "legacy_command": "work_transition",
+      "status": "accepted",
+      "suggested_capability": "work.read"
+    }
+  ],
+  "discarded": [],
+  "github": {
+    "current_repositories": [
+      {
+        "default_branch": "main",
+        "id": "primary",
+        "name": "openclaw-nexus",
+        "owner": "openclaw",
+        "visibility": "private_or_internal"
+      }
+    ],
+    "decision": "kept_greenfield_github_yml_as_authority; legacy commands used as coverage hints only",
+    "legacy_github_commands_seen": [
+      "github_alerts",
+      "github_issue_create",
+      "github_issue_sync",
+      "github_pr_link",
+      "github_pr_sync",
+      "github_repos_list",
+      "github_repos_sync",
+      "github_status",
+      "github_sync"
+    ],
+    "legacy_source": "tools/nexusctl/commands.json",
+    "status": "accepted"
+  },
+  "goals": [
+    {
+      "commands_seen": [
+        "goals_create",
+        "goals_list",
+        "goals_show",
+        "goals_update_status"
+      ],
+      "current_goal_ids": [
+        "runtime_integrity",
+        "software_delivery_quality",
+        "trade_success_quality"
+      ],
+      "decision": "legacy goal commands describe operations, not canonical goal records",
+      "legacy_source": "tools/nexusctl/commands.json",
+      "status": "manual_review"
+    }
+  ],
+  "idempotency_key": "legacy-import-v1",
+  "legacy_code_copied": false,
+  "legacy_root": "referenzen/setup",
+  "manual_review": [
+    {
+      "item": {
+        "commands_seen": [
+          "goals_create",
+          "goals_list",
+          "goals_show",
+          "goals_update_status"
+        ],
+        "current_goal_ids": [
+          "runtime_integrity",
+          "software_delivery_quality",
+          "trade_success_quality"
+        ],
+        "decision": "legacy goal commands describe operations, not canonical goal records",
+        "legacy_source": "tools/nexusctl/commands.json",
+        "status": "manual_review"
+      },
+      "section": "goals"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "auth",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "capabilities_list",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "capabilities_set_status",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "capabilities_show",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "context",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "db_restore_check",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "repos_assigned",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "repos_list",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "repos_show",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "request_create",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "request_list",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "request_show",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "request_transition",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "reviews_list",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "reviews_submit",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "rotate_token",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "suggested_capability_missing_in_greenfield",
+        "legacy_command": "runtime_tools_check",
+        "status": "manual_review",
+        "suggested_capability": "runtime.tool.invoke"
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "suggested_capability_missing_in_greenfield",
+        "legacy_command": "runtime_tools_list",
+        "status": "manual_review",
+        "suggested_capability": "runtime.tool.invoke"
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "suggested_capability_missing_in_greenfield",
+        "legacy_command": "runtime_tools_show",
+        "status": "manual_review",
+        "suggested_capability": "runtime.tool.invoke"
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "systems_list",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    },
+    {
+      "item": {
+        "decision": "no_automatic_capability_mapping",
+        "legacy_command": "systems_show",
+        "status": "manual_review",
+        "suggested_capability": null
+      },
+      "section": "capabilities"
+    }
+  ],
+  "mode": "one_shot_review_import",
+  "phase": 19,
+  "runtime_dependency_created": false,
+  "schema_version": 1,
+  "summary": {
+    "accepted": 39,
+    "discarded": 0,
+    "legacy_agents_seen": 10,
+    "legacy_capability_commands_seen": 49,
+    "manual_review": 22
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "action": "submitted",
+  "repository": {
+    "id": 987654321,
+    "name": "openclaw-nexus",
+    "full_name": "openclaw/openclaw-nexus",
+    "owner": {"login": "openclaw", "type": "Organization"}
+  },
+  "pull_request": {
+    "id": 444555666,
+    "number": 17,
+    "state": "open",
+    "head": {"sha": "1111111111111111111111111111111111111111"}
+  },
+  "review": {
+    "id": 777888999,
+    "node_id": "PRR_kwDOFixture",
+    "state": "APPROVED",
+    "commit_id": "1111111111111111111111111111111111111111",
+    "body": "Fixture approval for contract testing.",
+    "user": {"login": "fixture-reviewer", "type": "User"}
+  },
+  "sender": {"login": "fixture-sender", "type": "User"}
+}

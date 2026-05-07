@@ -1,0 +1,76 @@
+schema_version: 1
+goals:
+- id: trade_success_quality
+  domain: trading
+  owner_agent: trading-strategist
+  description: Rolling 90-day trading outcome quality.
+  window: rolling_90d
+  status: active
+  metrics:
+  - id: win_rate
+    type: percentage
+    operator: '>='
+    target: 60
+    unit: '%'
+  - id: average_profit_pct
+    type: percentage
+    operator: '>='
+    target: 5
+    unit: '%'
+  - id: max_drawdown_pct
+    type: percentage
+    operator: <=
+    target: 12
+    unit: '%'
+  - id: min_sample_size
+    type: count
+    operator: '>='
+    target: 50
+    unit: trades
+  evaluation:
+    passing: all_metrics_meet_targets
+    warning: one_metric_near_threshold
+    failing: any_hard_limit_breached
+    unknown: insufficient_evidence
+- id: software_delivery_quality
+  domain: software
+  owner_agent: software-techlead
+  description: Software delivery guardrails for tests, review, and scope safety.
+  status: active
+  metrics:
+  - id: tests_required
+    type: boolean
+    operator: ==
+    target: true
+  - id: review_required
+    type: boolean
+    operator: ==
+    target: true
+  - id: no_scope_violation
+    type: boolean
+    operator: ==
+    target: true
+  evaluation:
+    passing: all_required_gates_true
+    failing: any_required_gate_false
+    unknown: no_delivery_evidence
+- id: runtime_integrity
+  domain: platform
+  owner_agent: platform-maintainer
+  description: Generated runtime drift and backup health.
+  status: active
+  metrics:
+  - id: generated_drift
+    type: count
+    operator: ==
+    target: 0
+    unit: files
+  - id: backup_success
+    type: boolean
+    operator: ==
+    target: true
+  evaluation:
+    passing: no_drift_and_backup_success
+    warning: backup_missing_but_no_drift
+    failing: drift_detected_or_backup_failed
+    unknown: not_measured

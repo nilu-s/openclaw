@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:68c6a3219d688f2f66245a4c97bfda32243478f2aa6aeaae819f0efe810a0940",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "trading-strategist"
+  ],
+  "description": "Submit business-domain acceptance verdicts.",
+  "id": "nexusctl_acceptance",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

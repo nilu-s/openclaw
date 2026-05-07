@@ -1,0 +1,119 @@
+name: openclaw-nexus
+
+x-nexusctl-dev-env: &nexusctl-dev-env
+  # Development profile: remote container networking is allowed only through
+  # explicit insecure opt-ins so `doctor` can flag it as non-production-ready.
+  NEXUSCTL_DEPLOYMENT_MODE: development
+  NEXUSCTL_API_HOST: 0.0.0.0
+  NEXUSCTL_API_TLS_ENABLED: "0"
+  NEXUSCTL_API_ALLOW_INSECURE_REMOTE_BIND: "1"
+  NEXUSCTL_API_ALLOW_INSECURE_REMOTE: "1"
+
+x-nexusctl-internal-production-env: &nexusctl-internal-production-env
+  # Operator reference for internal production overrides: use a reverse proxy/TLS
+  # boundary and remove insecure remote opt-ins in config/.env.
+  NEXUSCTL_DEPLOYMENT_MODE: internal-production
+  NEXUSCTL_API_TLS_ENABLED: "1"
+  NEXUSCTL_API_ALLOW_INSECURE_REMOTE_BIND: "0"
+  NEXUSCTL_API_ALLOW_INSECURE_REMOTE: "0"
+  NEXUSCTL_WEBHOOK_RECONCILIATION_ENABLED: "1"
+
+x-nexusctl-common: &nexusctl-common
+  build:
+    context: ..
+    dockerfile: config/Dockerfile.nexusctl
+  env_file:
+    - .env.example
+  environment:
+    <<: *nexusctl-dev-env
+    NEXUSCTL_PROJECT_ROOT: /workspace
+    NEXUSCTL_DB: /data/nexus.db
+    NEXUSCTL_BACKUP_DIR: /backups
+    NEXUSCTL_RECOVERY_EVIDENCE_DIR: /recovery-evidence
+    NEXUSCTL_WORKSPACES_DIR: /workspaces
+    NEXUSCTL_REPO_WORKTREES_DIR: /repo-worktrees
+  volumes:
+    - nexus-data:/data
+    - nexus-backups:/backups
+    - recovery-evidence:/recovery-evidence
+    - workspaces:/workspaces
+    - repo-worktrees:/repo-worktrees
+    - ../nexus:/workspace/nexus:ro
+    - ../generated:/workspace/generated
+
+services:
+  nexusctl-api:
+    <<: *nexusctl-common
+    entrypoint: ["python", "-m", "nexusctl.interfaces.http.server"]
+    command: []
+    ports:
+      - "${NEXUSCTL_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nexusctl-worker:
+    <<: *nexusctl-common
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        nexusctl db init --db "$${NEXUSCTL_DB}" --project-root "$${NEXUSCTL_PROJECT_ROOT}" --json
+        while true; do
+          nexusctl schedules run nexus_scope_expiry_guard --db "$${NEXUSCTL_DB}" --project-root "$${NEXUSCTL_PROJECT_ROOT}" --dry-run --json || true
+          sleep "$${NEXUSCTL_WORKER_INTERVAL_SECONDS:-300}"
+        done
+    healthcheck:
+      test: ["CMD", "test", "-w", "/data"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nexusctl-cli:
+    <<: *nexusctl-common
+    profiles: ["cli"]
+    entrypoint: ["nexusctl"]
+    command: ["doctor", "--json"]
+    stdin_open: true
+    tty: true
+
+  openclaw-gateway:
+    build:
+      context: ..
+      dockerfile: config/Dockerfile.openclaw
+      args:
+        OPENCLAW_BASE_IMAGE: ${OPENCLAW_BASE_IMAGE:-python:3.11-slim}
+    env_file:
+      - .env.example
+    environment:
+      OPENCLAW_CONFIG: /generated/openclaw/openclaw.json
+      OPENCLAW_GENERATED_DIR: /generated
+      OPENCLAW_WORKSPACES_DIR: /workspaces
+      NEXUSCTL_API_URL: http://nexusctl-api:8080
+      # Development-only plain HTTP to the sibling API container. Internal
+      # production should put the API behind HTTPS and remove this opt-in.
+      NEXUSCTL_API_ALLOW_INSECURE_REMOTE: "1"
+    depends_on:
+      nexusctl-api:
+        condition: service_healthy
+    volumes:
+      - ../generated:/generated:ro
+      - workspaces:/workspaces
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "test", "-r", "/generated/openclaw/openclaw.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nexus-data:
+  nexus-backups:
+  recovery-evidence:
+  workspaces:
+  repo-worktrees:

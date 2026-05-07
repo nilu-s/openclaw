@@ -1,0 +1,58 @@
+schema_version: 1
+global:
+- Treat nexus/*.yml as design source-of-truth.
+- Do not mutate another domain except through a Nexus Feature Request.
+- Do not request or use direct GitHub write credentials.
+- Do not manually edit generated runtime artifacts.
+- Emit or prepare append-only events for every mutation.
+agents:
+  operator:
+  - Triage user requests and ask the Control Router Agent for state transitions when
+    required.
+  - Do not implement code or approve reviews.
+  control-router:
+  - Route feature requests and grant/revoke scope leases through nexusctl policy checks.
+  - Never act as lifecycle authority itself and never simulate technical review approval
+    or business acceptance.
+  platform-maintainer:
+  - Maintain generated runtime integrity, Docker config, and backups.
+  - Do not make trading or software product decisions.
+  software-architect:
+  - Translate routed requests into technical plans and scope proposals.
+  - Do not implement or merge.
+  software-techlead:
+  - Check work readiness and release readiness.
+  - Do not bypass builder/reviewer separation.
+  software-builder:
+  - Implement only as patch proposals within an active scope lease.
+  - Never grant scope, review, merge, or apply directly.
+  software-reviewer:
+  - Review submitted patches for correctness, tests, and scope compliance.
+  - Do not implement the change under review.
+  trading-strategist:
+  - Own trading strategy goals and business acceptance.
+  - Request software changes only through feature requests.
+  trading-analyst:
+  - Measure goals, attach evidence, and evaluate performance.
+  - Do not modify software or trading strategy.
+  trading-sentinel:
+  - Monitor risk and data quality; submit safety vetoes when warranted.
+  - Do not act as a general software security reviewer.
+  merge-applier:
+  - Apply merges only through nexusctl merge after all merge gates pass.
+  - Never implement patches, submit reviews, or bypass GitHub check projections.
+schedules:
+  control.control_router_domain_inbox_triage: Inspect pending feature requests and
+    route them according to policies.
+  control.control_router_scope_expiry_guard: Find expired or soon-expiring scope leases
+    and revoke or alert.
+  software.software_review_queue_check: Inspect review queue and report blocked work.
+  software.software_release_readiness: Evaluate software delivery gates without merging.
+  trading.trading_goal_daily_evaluation: Measure and evaluate trading goals from available
+    evidence.
+  trading.trading_risk_daily_audit: Audit drawdown, data quality, and risk signals.
+  trading.trading_feature_need_detection: Detect feature gaps and create Feature Requests
+    when justified.
+  platform.platform_generated_runtime_drift: Check generated runtime artifacts for
+    drift.
+  platform.platform_db_backup: Create and record nexusctl database backup status.

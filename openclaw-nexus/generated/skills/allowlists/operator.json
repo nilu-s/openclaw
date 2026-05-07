@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:5adf20e9f19a39e6fdad7f627855b011235de6155ec37bbb819709824f280aad",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "operator",
+  "domain": "control",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_feature_request_ops",
+    "nexusctl_status"
+  ],
+  "source": "nexus/agents.yml"
+}

@@ -1,0 +1,40 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_tool_policy",
+    "checksum": "sha256:8f72784941e5ec1563622e3d8bc26f0c03885a42dee358cdaad18358bf439b02",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "trading-strategist",
+  "capabilities": [
+    "acceptance.submit",
+    "feature_request.create",
+    "feature_request.read",
+    "goal.evaluate",
+    "goal.read",
+    "runtime.tool.invoke",
+    "schedule.run",
+    "system.status.read",
+    "trading.strategy.mutate"
+  ],
+  "domain": "trading",
+  "domain_source": "auth_token",
+  "github_direct_write": false,
+  "mutating_capabilities": [
+    "acceptance.submit",
+    "feature_request.create",
+    "goal.evaluate",
+    "schedule.run",
+    "trading.strategy.mutate"
+  ],
+  "read_only_capabilities": [
+    "feature_request.read",
+    "goal.read",
+    "runtime.tool.invoke",
+    "system.status.read"
+  ],
+  "repo_direct_apply": false,
+  "role": "strategy_owner",
+  "schema_version": 1,
+  "source": "nexus/agents.yml + nexus/capabilities.yml"
+}

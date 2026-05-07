@@ -1,0 +1,20 @@
+{
+  "_generated": {
+    "artifact_kind": "agent_skill_allowlist",
+    "checksum": "sha256:c59c12bf350f0b6416b5b6e43eaa1bb26aa93fa1240fa609e64079cb03d15caf",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent_id": "nexus",
+  "domain": "control",
+  "schema_version": 1,
+  "skills": [
+    "nexusctl_feature_request_ops",
+    "nexusctl_github_projection",
+    "nexusctl_github_reconciliation",
+    "nexusctl_routing",
+    "nexusctl_scope_control",
+    "nexusctl_status"
+  ],
+  "source": "nexus/agents.yml"
+}

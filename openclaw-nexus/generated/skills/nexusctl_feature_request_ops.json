@@ -1,0 +1,21 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:ba99ccbc381088447c0b91c1fe159b2735890aba58739dcca254488e599c0c3e",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router",
+    "operator",
+    "software-architect",
+    "software-builder",
+    "software-reviewer",
+    "software-techlead",
+    "trading-strategist"
+  ],
+  "description": "Create and inspect cross-domain feature requests.",
+  "id": "nexusctl_feature_request_ops",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

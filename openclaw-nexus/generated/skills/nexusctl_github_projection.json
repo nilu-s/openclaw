@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:c5fc1dd276d496366b5bbf2f63f7e210ef952f96841c1a59fb76abee342b9d9f",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router",
+    "merge-applier"
+  ],
+  "description": "Sync Nexus state to GitHub through the GitHub App.",
+  "id": "nexusctl_github_projection",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

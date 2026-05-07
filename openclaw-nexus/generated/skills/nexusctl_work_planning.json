@@ -1,0 +1,16 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:b984e2a7b2ca0e4ce7d74bd1b0ce93dca88c7c9337c9cdffa7d608ffec22ba85",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "software-architect",
+    "software-techlead"
+  ],
+  "description": "Plan and assign software work.",
+  "id": "nexusctl_work_planning",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

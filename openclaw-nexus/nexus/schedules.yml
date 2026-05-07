@@ -1,0 +1,65 @@
+schema_version: 1
+timezone: UTC
+schedules:
+- id: control_router_domain_inbox_triage
+  domain: control
+  agent: control-router
+  cron: '*/30 * * * *'
+  standing_order: control.control_router_domain_inbox_triage
+  enabled: true
+- id: control_router_scope_expiry_guard
+  domain: control
+  agent: control-router
+  cron: '*/15 * * * *'
+  standing_order: control.control_router_scope_expiry_guard
+  enabled: true
+- id: software_review_queue_check
+  domain: software
+  agent: software-reviewer
+  cron: 0 */4 * * *
+  standing_order: software.software_review_queue_check
+  enabled: true
+- id: software_release_readiness
+  domain: software
+  agent: software-techlead
+  cron: 0 9 * * 1-5
+  standing_order: software.software_release_readiness
+  enabled: true
+- id: trading_goal_daily_evaluation
+  domain: trading
+  agent: trading-analyst
+  cron: 30 6 * * *
+  standing_order: trading.trading_goal_daily_evaluation
+  enabled: true
+- id: trading_risk_daily_audit
+  domain: trading
+  agent: trading-sentinel
+  cron: 45 6 * * *
+  standing_order: trading.trading_risk_daily_audit
+  enabled: true
+- id: trading_feature_need_detection
+  domain: trading
+  agent: trading-strategist
+  cron: 0 7 * * 1-5
+  standing_order: trading.trading_feature_need_detection
+  enabled: true
+- id: platform_generated_runtime_drift
+  domain: platform
+  agent: platform-maintainer
+  cron: '*/20 * * * *'
+  standing_order: platform.platform_generated_runtime_drift
+  enabled: true
+- id: platform_db_backup
+  domain: platform
+  agent: platform-maintainer
+  cron: 15 2 * * *
+  standing_order: platform.platform_db_backup
+  enabled: true
+guardrails:
+  autonomous_builder_cronjobs_allowed: false
+  cron_prompts_duplicate_standing_orders: false
+  schedule_source_of_truth: nexusctl
+  cronjobs_mutated_by: nexusctl_schedule_control_flow
+  agents_may_request_schedule_changes: true
+  agents_may_trigger_allowed_runs: true
+  agents_may_edit_runtime_cronjobs_directly: false

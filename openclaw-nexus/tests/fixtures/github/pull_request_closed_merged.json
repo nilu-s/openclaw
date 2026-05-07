@@ -1,0 +1,41 @@
+{
+  "action": "closed",
+  "repository": {
+    "id": 987654321,
+    "name": "openclaw-nexus",
+    "full_name": "openclaw/openclaw-nexus",
+    "private": true,
+    "owner": {"login": "openclaw", "type": "Organization"},
+    "default_branch": "main"
+  },
+  "number": 17,
+  "pull_request": {
+    "id": 444555666,
+    "node_id": "PR_kwDOFixture",
+    "number": 17,
+    "state": "closed",
+    "locked": false,
+    "title": "Implement fixture-backed reconciliation",
+    "merged": true,
+    "mergeable": null,
+    "merge_commit_sha": "0f1e2d3c4b5a69788776655443322110fedcba98",
+    "head": {
+      "label": "openclaw:nexus/patch/FR-2026-0001",
+      "ref": "nexus/patch/FR-2026-0001",
+      "sha": "1111111111111111111111111111111111111111",
+      "repo": {"full_name": "openclaw/openclaw-nexus"}
+    },
+    "base": {
+      "label": "openclaw:main",
+      "ref": "main",
+      "sha": "2222222222222222222222222222222222222222",
+      "repo": {"full_name": "openclaw/openclaw-nexus"}
+    },
+    "labels": [
+      {"name": "nexus:PATCH-2026-0001"},
+      {"name": "status:reviewed"}
+    ],
+    "user": {"login": "fixture-user", "type": "User"}
+  },
+  "sender": {"login": "fixture-sender", "type": "User"}
+}

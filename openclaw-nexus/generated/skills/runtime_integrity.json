@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:7e0de313e25cbe6ea4fd6d4714d688a1ccd12b73e96384d52f40b3ec8df99b92",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "platform-maintainer"
+  ],
+  "description": "Validate generated runtime drift and backups.",
+  "id": "runtime_integrity",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

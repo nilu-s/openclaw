@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "phase": "VP-10",
+  "source_report": "generated/imports/legacy_import_report.json",
+  "summary": {
+    "runtime_tool_review_items_seen": 3,
+    "runtime_tool_review_items_resolved": 3,
+    "critical_unresolved_runtime_tool_items": 0
+  },
+  "decisions": [
+    {
+      "legacy_command": "runtime_tools_list",
+      "source_decision": "suggested_capability_missing_in_greenfield",
+      "status": "resolved",
+      "resolution": "mapped_to_runtime_tool_guardrail_capability",
+      "capability": "runtime.tool.invoke",
+      "runtime_policy": "List operations expose the registry only through Nexusctl runtime-tool guardrails. The command does not grant access to a concrete tool by itself."
+    },
+    {
+      "legacy_command": "runtime_tools_show",
+      "source_decision": "suggested_capability_missing_in_greenfield",
+      "status": "resolved",
+      "resolution": "mapped_to_runtime_tool_guardrail_capability",
+      "capability": "runtime.tool.invoke",
+      "runtime_policy": "Show operations expose metadata only through Nexusctl runtime-tool guardrails. The command does not bypass domain or tool capability checks."
+    },
+    {
+      "legacy_command": "runtime_tools_check",
+      "source_decision": "suggested_capability_missing_in_greenfield",
+      "status": "resolved",
+      "resolution": "mapped_to_runtime_tool_guardrail_capability",
+      "capability": "runtime.tool.invoke",
+      "runtime_policy": "Check operations require runtime.tool.invoke before evaluating the concrete tool capability, domain boundary, live-trade approval and destructive-deny rules."
+    }
+  ],
+  "non_runtime_manual_review_items": {
+    "status": "deferred_to_existing_domain_capabilities_or_future_product_design",
+    "note": "VP-10 resolves the critical runtime-tool review gap only. Other imported command names remain non-authoritative hints unless a later phase explicitly promotes them."
+  }
+}

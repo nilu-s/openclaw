@@ -1,0 +1,87 @@
+schema_version: 1
+guardrails:
+  source_of_truth: nexusctl
+  default_live_trade_decision: approval_required
+  default_destructive_decision: deny
+  trading_mvp_allowed_side_effects:
+  - read_only
+  - simulation
+  - paper_trade
+  software_tools_for_trading_agents: deny
+  runtime_tool_access_capability: runtime.tool.invoke
+  generated_runtime_config_mutation: nexusctl_generation_only
+  agents_may_edit_generated_runtime_config_directly: false
+  runtime_cronjob_mutation: nexusctl_schedule_control_flow_only
+side_effect_levels:
+- read_only
+- simulation
+- paper_trade
+- live_trade
+- destructive
+tools:
+- id: system.status.read
+  name: Read Nexus status
+  domain: control
+  capability: system.status.read
+  side_effect: read_only
+  command: nexusctl me --json
+  description: Read-only identity and runtime status inspection.
+- id: software.test.run
+  name: Run software tests
+  domain: software
+  capability: patch.submit
+  side_effect: simulation
+  command: scripts/run_tests.sh
+  description: Run local software test suite in an isolated workspace.
+- id: software.diff.inspect
+  name: Inspect software diff
+  domain: software
+  capability: patch.read
+  side_effect: read_only
+  command: git diff --stat
+  description: Inspect scoped worktree diffs without repository mutation.
+- id: trading.marketdata.read
+  name: Read trading market data
+  domain: trading
+  capability: goal.read
+  side_effect: read_only
+  command: trading-tools marketdata read --paper
+  description: Read market data for measurement and analysis only.
+- id: trading.backtest.simulate
+  name: Run trading backtest simulation
+  domain: trading
+  capability: goal.measure
+  side_effect: simulation
+  command: trading-tools backtest run --simulation
+  description: Run non-live backtests for evidence collection.
+- id: trading.paper.order
+  name: Submit paper-trade order
+  domain: trading
+  capability: trading.strategy.mutate
+  side_effect: paper_trade
+  command: trading-tools order submit --paper
+  description: Submit paper-trade actions only; no live market execution.
+- id: trading.live.order
+  name: Submit live-trade order
+  domain: trading
+  capability: trading.strategy.mutate
+  side_effect: live_trade
+  command: trading-tools order submit --live
+  approval_required: true
+  enabled: true
+  description: Live-trade path is never auto-allowed in the MVP.
+- id: platform.backup.create
+  name: Create platform backup
+  domain: platform
+  capability: backup.create
+  side_effect: simulation
+  command: nexusctl platform backup --dry-run
+  description: Dry-run backup orchestration for runtime integrity checks.
+- id: nexus.repo.apply
+  name: Apply approved repository merge
+  domain: control
+  capability: repo.apply
+  side_effect: destructive
+  command: nexusctl merge <patch-id> --json
+  enabled: true
+  description: Canonical repo mutation remains blocked by runtime guardrails unless merge gates run separately.

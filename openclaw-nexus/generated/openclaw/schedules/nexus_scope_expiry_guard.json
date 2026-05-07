@@ -1,0 +1,27 @@
+{
+  "_generated": {
+    "artifact_kind": "openclaw_schedule",
+    "checksum": "sha256:02794efe3b10949cdb38916d20a6bf5178ca620d98cab2347863d1d60cffc30d",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "agent": "nexus",
+  "command": [
+    "nexusctl",
+    "schedules",
+    "run",
+    "nexus_scope_expiry_guard",
+    "--json"
+  ],
+  "cron": "*/15 * * * *",
+  "domain": "control",
+  "enabled": true,
+  "guards": {
+    "domain_source": "auth_token",
+    "no_manual_generated_edits": true,
+    "standing_order_source": "nexus/standing-orders.yml"
+  },
+  "id": "nexus_scope_expiry_guard",
+  "prompt": "Run Nexusctl schedule `nexus_scope_expiry_guard` for standing order `control.nexus_scope_expiry_guard`. Read the standing order from nexus/standing-orders.yml at runtime; do not duplicate or reinterpret it in generated cron config.",
+  "standing_order": "control.nexus_scope_expiry_guard"
+}

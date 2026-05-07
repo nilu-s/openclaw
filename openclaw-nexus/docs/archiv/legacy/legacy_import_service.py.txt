@@ -1,0 +1,245 @@
+# HISTORICAL ARCHIVE ONLY
+# This file is not part of the active Nexusctl app layer, runtime, tests,
+# public CLI, or API contract. It is retained only to document the removed
+# one-shot legacy import implementation.
+
+"""One-shot legacy package importer for blueprint workflow9.
+
+The importer deliberately produces reviewable Nexus design *candidates* and a
+report. It never imports legacy Python/runtime code into Nexusctl and is safe to
+run repeatedly: the same input tree yields the same report files.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+AGENT_ALIASES = {
+    "main": "operator",
+    "nexus": "nexus",
+    "platform-optimizer": "platform-maintainer",
+    "sw-architect": "software-architect",
+    "sw-techlead": "software-techlead",
+    "sw-builder": "software-builder",
+    "sw-reviewer": "software-reviewer",
+    "trading-strategist": "trading-strategist",
+    "trading-analyst": "trading-analyst",
+    "trading-sentinel": "trading-sentinel",
+}
+
+COMMAND_CAPABILITY_MAP = {
+    "goals_": "goal.read",
+    "scopes_": "scope.lease.grant",
+    "events": "events.read",
+    "runtime_tools_": "runtime.tool.invoke",
+    "github_": "github.issue.sync",
+    "feature_request": "feature_request.read",
+    "work_": "work.read",
+    "patch_": "patch.read",
+    "review_": "review.submit",
+    "acceptance_": "acceptance.submit",
+    "db_backup": "backup.create",
+}
+
+
+@dataclass(frozen=True)
+class ImportReport:
+    report: dict[str, Any]
+    json_path: Path
+    markdown_path: Path
+
+
+class LegacyImportService:
+    """Convert legacy setup metadata into idempotent review reports."""
+
+    def __init__(self, project_root: Path | str) -> None:
+        self.project_root = Path(project_root)
+        self.nexus_root = self.project_root / "nexus"
+
+    def run(self, legacy_root: Path | str | None = None, output_dir: Path | str | None = None) -> ImportReport:
+        legacy = Path(legacy_root) if legacy_root is not None else self.project_root / "referenzen" / "setup"
+        if not legacy.exists():
+            raise FileNotFoundError(f"legacy input does not exist: {legacy}")
+        out = Path(output_dir) if output_dir is not None else self.project_root / "generated" / "imports"
+        out.mkdir(parents=True, exist_ok=True)
+
+        current = self._load_current_design()
+        report = {
+            "schema_version": 1,
+            "milestone": 19,
+            "mode": "one_shot_review_import",
+            "legacy_root": self._rel(legacy),
+            "runtime_dependency_created": False,
+            "legacy_code_copied": False,
+            "idempotency_key": "legacy-import-v1",
+            "summary": {},
+            "agents": self._scan_agents(legacy, current["agents"]),
+            "goals": self._scan_goals(legacy, current["goals"]),
+            "capabilities": self._scan_capabilities(legacy, current["capabilities"]),
+            "github": self._scan_github(legacy, current["github"]),
+            "manual_review": [],
+            "discarded": [],
+        }
+        self._finalize(report)
+
+        json_path = out / "legacy_import_report.json"
+        markdown_path = out / "legacy_import_report.md"
+        json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        markdown_path.write_text(self._render_markdown(report), encoding="utf-8")
+        return ImportReport(report=report, json_path=json_path, markdown_path=markdown_path)
+
+    def _load_current_design(self) -> dict[str, Any]:
+        def load(name: str) -> dict[str, Any]:
+            path = self.nexus_root / name
+            if not path.exists():
+                return {}
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+
+        agents = {item.get("id"): item for item in load("agents.yml").get("agents", []) if isinstance(item, dict)}
+        goals = {item.get("id"): item for item in load("goals.yml").get("goals", []) if isinstance(item, dict)}
+        caps = {item.get("id"): item for item in load("capabilities.yml").get("capabilities", []) if isinstance(item, dict)}
+        github = load("github.yml").get("github", {})
+        return {"agents": agents, "goals": goals, "capabilities": caps, "github": github if isinstance(github, dict) else {}}
+
+    def _scan_agents(self, legacy: Path, current_agents: dict[str, Any]) -> list[dict[str, Any]]:
+        agents_dir = legacy / "agents"
+        rows: list[dict[str, Any]] = []
+        if not agents_dir.exists():
+            return rows
+        for path in sorted(p for p in agents_dir.iterdir() if p.is_dir()):
+            target = AGENT_ALIASES.get(path.name)
+            files = sorted(p.name for p in path.iterdir() if p.is_file())
+            status = "accepted" if target in current_agents else "manual_review"
+            rows.append(
+                {
+                    "legacy_id": path.name,
+                    "target_agent_id": target,
+                    "status": status,
+                    "files_seen": files,
+                    "decision": "mapped_to_greenfield_agent" if status == "accepted" else "no_safe_agent_mapping",
+                }
+            )
+        return rows
+
+    def _scan_goals(self, legacy: Path, current_goals: dict[str, Any]) -> list[dict[str, Any]]:
+        commands = self._load_commands(legacy)
+        legacy_goal_commands = sorted(k for k in commands if k.startswith("goals_"))
+        return [
+            {
+                "legacy_source": "tools/nexusctl/commands.json",
+                "status": "manual_review",
+                "decision": "legacy goal commands describe operations, not canonical goal records",
+                "commands_seen": legacy_goal_commands,
+                "current_goal_ids": sorted(current_goals),
+            }
+        ]
+
+    def _scan_capabilities(self, legacy: Path, current_caps: dict[str, Any]) -> list[dict[str, Any]]:
+        commands = self._load_commands(legacy)
+        rows: list[dict[str, Any]] = []
+        for command_id in sorted(commands):
+            suggested = None
+            for prefix, capability in COMMAND_CAPABILITY_MAP.items():
+                if command_id == prefix or command_id.startswith(prefix):
+                    suggested = capability
+                    break
+            if suggested is None:
+                rows.append(
+                    {
+                        "legacy_command": command_id,
+                        "status": "manual_review",
+                        "decision": "no_automatic_capability_mapping",
+                        "suggested_capability": None,
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "legacy_command": command_id,
+                        "status": "accepted" if suggested in current_caps else "manual_review",
+                        "decision": "mapped_to_existing_capability" if suggested in current_caps else "suggested_capability_missing_in_greenfield",
+                        "suggested_capability": suggested,
+                    }
+                )
+        return rows
+
+    def _scan_github(self, legacy: Path, current_github: dict[str, Any]) -> dict[str, Any]:
+        commands = self._load_commands(legacy)
+        github_commands = sorted(k for k in commands if "github" in k)
+        repos = current_github.get("repositories", []) if isinstance(current_github.get("repositories"), list) else []
+        return {
+            "legacy_source": "tools/nexusctl/commands.json",
+            "status": "accepted" if repos else "manual_review",
+            "decision": "kept_greenfield_github_yml_as_authority; legacy commands used as coverage hints only",
+            "legacy_github_commands_seen": github_commands,
+            "current_repositories": repos,
+        }
+
+    def _load_commands(self, legacy: Path) -> dict[str, str]:
+        path = legacy / "tools" / "nexusctl" / "commands.json"
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+    def _finalize(self, report: dict[str, Any]) -> None:
+        for section in ("agents", "goals", "capabilities"):
+            for item in report[section]:
+                if item.get("status") == "manual_review":
+                    report["manual_review"].append({"section": section, "item": item})
+                elif item.get("status") == "discarded":
+                    report["discarded"].append({"section": section, "item": item})
+        if report["github"].get("status") == "manual_review":
+            report["manual_review"].append({"section": "github", "item": report["github"]})
+        report["summary"] = {
+            "accepted": self._count_status(report, "accepted"),
+            "manual_review": len(report["manual_review"]),
+            "discarded": len(report["discarded"]),
+            "legacy_agents_seen": len(report["agents"]),
+            "legacy_capability_commands_seen": len(report["capabilities"]),
+        }
+
+    def _count_status(self, report: dict[str, Any], status: str) -> int:
+        total = 0
+        for section in ("agents", "goals", "capabilities"):
+            total += sum(1 for item in report[section] if item.get("status") == status)
+        total += 1 if report["github"].get("status") == status else 0
+        return total
+
+    def _render_markdown(self, report: dict[str, Any]) -> str:
+        lines = [
+            "# Legacy Import Report",
+            "",
+            "Legacy one-shot converter report. No legacy code was copied into the runtime package.",
+            "",
+            "## Summary",
+            "",
+            f"- Accepted: {report['summary']['accepted']}",
+            f"- Manual review: {report['summary']['manual_review']}",
+            f"- Discarded: {report['summary']['discarded']}",
+            f"- Legacy agents seen: {report['summary']['legacy_agents_seen']}",
+            f"- Legacy commands seen: {report['summary']['legacy_capability_commands_seen']}",
+            "",
+            "## Agent mappings",
+            "",
+        ]
+        for agent in report["agents"]:
+            lines.append(f"- `{agent['legacy_id']}` -> `{agent.get('target_agent_id')}`: {agent['status']} ({agent['decision']})")
+        lines.extend(["", "## GitHub", "", f"- {report['github']['status']}: {report['github']['decision']}", "", "## Manual review items", ""])
+        for item in report["manual_review"]:
+            lines.append(f"- {item['section']}: {item['item'].get('decision', 'review required')}")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _rel(self, path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(self.project_root.resolve()))
+        except ValueError:
+            return str(path)

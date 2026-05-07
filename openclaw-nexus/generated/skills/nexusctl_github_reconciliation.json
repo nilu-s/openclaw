@@ -1,0 +1,15 @@
+{
+  "_generated": {
+    "artifact_kind": "skill",
+    "checksum": "sha256:8a6c2e4c9c2572859bc738951bbc638dbd69db4d6fd6c204313aaf7faab97f22",
+    "generated_by": "nexusctl",
+    "source": "nexus/*.yml"
+  },
+  "allowed_agents": [
+    "control-router"
+  ],
+  "description": "Verify GitHub webhooks and reconcile projection drift back to Nexusctl policy.",
+  "id": "nexusctl_github_reconciliation",
+  "schema_version": 1,
+  "source": "nexus/capabilities.yml"
+}

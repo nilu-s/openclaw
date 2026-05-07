@@ -1,0 +1,38 @@
+schema_version: 1
+domains:
+- id: control
+  name: Control
+  status: mvp
+  description: User interface, Nexus authority, routing, audit, and approvals.
+  source_of_truth: nexusctl
+  default_visibility: all_domains
+- id: platform
+  name: Platform
+  status: mvp
+  description: OpenClaw runtime, generated artifacts, Docker, backups, and runtime
+    hygiene.
+  source_of_truth: nexusctl
+  default_visibility: own_domain
+- id: software
+  name: Software
+  status: mvp
+  description: Architecture, planning, scoped implementation proposals, technical
+    review, and release readiness.
+  source_of_truth: nexusctl
+  default_visibility: own_domain
+- id: trading
+  name: Trading
+  status: mvp
+  description: Trading goals, metrics, evidence, business acceptance, and risk veto.
+  source_of_truth: nexusctl
+  default_visibility: own_domain
+- id: research
+  name: Research
+  status: prepared_optional
+  description: Prepared future domain for research automation; not MVP-critical.
+  source_of_truth: nexusctl
+  default_visibility: own_domain
+domain_boundaries:
+  normal_agents_may_mutate_only_own_domain: true
+  cross_domain_work_channel: feature_request
+  domain_override_source: auth_token_only

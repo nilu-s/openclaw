@@ -1,0 +1,31 @@
+{
+  "action": "labeled",
+  "repository": {
+    "id": 987654321,
+    "node_id": "R_kgDOFixture",
+    "name": "openclaw-nexus",
+    "full_name": "openclaw/openclaw-nexus",
+    "private": true,
+    "owner": {
+      "login": "openclaw",
+      "id": 1001,
+      "type": "Organization"
+    },
+    "default_branch": "main"
+  },
+  "issue": {
+    "id": 111222333,
+    "node_id": "I_kwDOFixture",
+    "number": 42,
+    "state": "open",
+    "title": "Need webhook reconciliation",
+    "labels": [
+      {"id": 1, "name": "nexus:FR-2026-0001", "color": "ededed"},
+      {"id": 2, "name": "domain:trading", "color": "0e8a16"},
+      {"id": 3, "name": "status:proposed", "color": "1d76db"}
+    ],
+    "user": {"login": "fixture-user", "type": "User"}
+  },
+  "label": {"id": 3, "name": "status:proposed", "color": "1d76db"},
+  "sender": {"login": "fixture-sender", "type": "User"}
+}
