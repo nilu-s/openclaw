@@ -81,3 +81,4 @@ OpenClaw-Artefakte liegen unter `generated/*` und werden aus der Control Config 
 
 Die Root-README bleibt bewusst kurz. Produkt- und Betriebsdetails liegen unter `docs/`, während entwicklungs- und agentenbezogene Arbeitsdateien unter `.chatgpt/` gepflegt werden.
 nInternalnInternal
+Live push verification 1778543415
